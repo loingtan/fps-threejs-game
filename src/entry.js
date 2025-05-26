@@ -314,7 +314,7 @@ class FPSGameApp {
     // Tạo nhiều mutant random đơn giản
     if (this.assets["mutant"] && this.mutantAnims) {
         // Tạo 5 mutant ở vị trí random
-        for(let i = 0; i < 50; i++) {
+        for(let i = 0; i < 5; i++) {
             const mutantEntity = new Entity();
             
             // Random position trong khoảng -20 đến 20
