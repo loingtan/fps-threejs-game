@@ -236,6 +236,7 @@ class FPSGameApp {
     promises.push(this.AddAsset(runAnim, fbxLoader, "runAnim"));
     promises.push(this.AddAsset(attackAnim, fbxLoader, "attackAnim"));
     promises.push(this.AddAsset(dieAnim, fbxLoader, "dieAnim"));
+
     //AK47
     promises.push(this.AddAsset(ak47, gltfLoader, "ak47"));
     promises.push(this.AddAsset(muzzleFlash, gltfLoader, "muzzleFlash"));
@@ -310,6 +311,34 @@ class FPSGameApp {
       )
     );
     this.entityManager.Add(levelEntity);
+    // Tạo nhiều mutant random đơn giản
+    if (this.assets["mutant"] && this.mutantAnims) {
+        // Tạo 5 mutant ở vị trí random
+        for(let i = 0; i < 5; i++) {
+            const mutantEntity = new Entity();
+            
+            // Random position trong khoảng -20 đến 20
+            const x = (Math.random() - 0.5) * 40;
+            const z = (Math.random() - 0.5) * 40;
+            mutantEntity.SetPosition(new THREE.Vector3(x, 0, z));
+            mutantEntity.SetName(`Mutant_${i}`);
+            
+            mutantEntity.AddComponent(
+                new NpcCharacterController(
+                    SkeletonUtils.clone(this.assets["mutant"]),
+                    this.mutantAnims,
+                    this.scene,
+                    this.physicsWorld
+                )
+            );
+            mutantEntity.AddComponent(new AttackTrigger(this.physicsWorld));
+            mutantEntity.AddComponent(new CharacterCollision(this.physicsWorld));
+            mutantEntity.AddComponent(new DirectionDebug(this.scene));
+            
+            this.entityManager.Add(mutantEntity);
+        }
+        console.log("Created 5 random mutants");
+    }
 
     const skyEntity = new Entity();
     skyEntity.SetName("Sky");
