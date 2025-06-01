@@ -39,7 +39,7 @@ jobs:
 
       # 6. Upload the build output to Pages
       - name: Upload artifact for GitHub Pages
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: build/
 
