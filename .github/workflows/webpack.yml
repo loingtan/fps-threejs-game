@@ -12,6 +12,9 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read  # Ensure this is present for accessing the repository
 
     steps:
       # 1. Checkout the repo
