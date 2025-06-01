@@ -29,7 +29,7 @@ import navmesh from "./assets/navmesh.obj";
 
 import mutant from "./assets/animations/mutant.fbx";
 import idleAnim from "./assets/animations/mutant breathing idle.fbx";
-import attackAnim from "./assets/animations/Mutant Punch.fbx";
+import attackAnim from "./assets/animations/mutant punch.fbx";
 import walkAnim from "./assets/animations/mutant walking.fbx";
 import runAnim from "./assets/animations/mutant run.fbx";
 import dieAnim from "./assets/animations/mutant dying.fbx";
