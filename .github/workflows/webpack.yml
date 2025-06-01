@@ -49,3 +49,5 @@ jobs:
       # 7. Publish to GitHub Pages
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v1
+        with:
+          build_dir: ./build
