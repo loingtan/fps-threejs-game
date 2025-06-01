@@ -16,7 +16,9 @@ jobs:
     steps:
       # 1. Checkout the repo
       - name: Checkout repository
-        uses: actions/checkout@v3
+        # uses: actions/checkout@v3
+      # v3 commit nó báo lỗi  
+        uses: actions/checkout@v4
 
       # 2. Setup Node.js (match your package.json “>=8.0.0”; using 18.x for performance & security)
       - name: Setup Node.js
