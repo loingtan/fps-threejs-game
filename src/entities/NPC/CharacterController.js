@@ -73,6 +73,9 @@ export default class CharacterController extends Component{
 
         this.scene.add(scene);
         this.stateMachine.SetState('idle');
+        // Đăng ký event handler để nhận sát thương
+        this.parent.RegisterEventHandler(this.TakeHit, 'hit');
+
     }
 
     UpdateDirection(){
