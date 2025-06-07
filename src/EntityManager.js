@@ -1,40 +1,55 @@
-export default class EntityManager{
-    constructor(){
-        this.ids = 0;
-        this.entities = [];
-    }
+export default class EntityManager {
+  constructor() {
+    this.ids = 0;
+    this.entities = {};
+    this.globalEventHandlers = [];
+  }
+  Get(name) {
+    return Object.values(this.entities).find((el) => el.Name === name);
+  }
 
-    Get(name){
-        return this.entities.find(el=>el.Name===name);
+  Add(entity) {
+    if (!entity.Name) {
+      entity.SetName(this.ids);
     }
+    entity.id = this.ids;
+    this.ids++;
+    entity.SetParent(this);
+    this.entities[entity.id] = entity;
+  }
 
-    Add(entity){
-        if(!entity.Name){
-            entity.SetName(this.ids);
-        }
-        entity.id = this.ids;
-        this.ids++;
-        entity.SetParent(this);
-        this.entities.push(entity);
+  Remove(entity) {
+    if (entity.id in this.entities) {
+      delete this.entities[entity.id];
     }
+  }
 
-    EndSetup(){
-        for(const ent of this.entities){
-            for(const key in ent.components){
-                ent.components[key].Initialize();
-            }
-        }
-    }
+  RegisterGlobalEventHandler(handler) {
+    this.globalEventHandlers.push(handler);
+  }
 
-    PhysicsUpdate(world, timeStep){
-        for (const entity of this.entities) {
-            entity.PhysicsUpdate(world, timeStep);
-        }
+  BroadcastGlobalEvent(eventData) {
+    for (const handler of this.globalEventHandlers) {
+      handler(eventData);
     }
+  }
+  EndSetup() {
+    for (const ent of Object.values(this.entities)) {
+      for (const key in ent.components) {
+        ent.components[key].Initialize();
+      }
+    }
+  }
 
-    Update(timeElapsed){
-        for (const entity of this.entities) {
-            entity.Update(timeElapsed);
-        }
+  PhysicsUpdate(world, timeStep) {
+    for (const entity of Object.values(this.entities)) {
+      entity.PhysicsUpdate(world, timeStep);
     }
+  }
+
+  Update(timeElapsed) {
+    for (const entity of Object.values(this.entities)) {
+      entity.Update(timeElapsed);
+    }
+  }
 }

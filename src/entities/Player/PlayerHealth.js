@@ -1,20 +1,65 @@
 import Component from "../../Component";
 
-export default class PlayerHealth extends Component{
-    constructor(){
-        super();
+export default class PlayerHealth extends Component {
+  constructor() {
+    super();
+    this.health = 100;
+    this.isDead = false;
+    this.gameOverDelay = 3000; // 3 seconds before returning to menu
+  }
 
+  TakeHit = (e) => {
+    if (this.isDead) return;
+
+    this.health = Math.max(0, this.health - 10);
+    this.uimanager.SetHealth(this.health);
+
+    // Check if player died
+    if (this.health <= 0 && !this.isDead) {
+      this.isDead = true;
+      this.handlePlayerDeath();
+    }
+  };
+  handlePlayerDeath() {
+    // Disable player movement
+    const controls = this.parent.GetComponent("PlayerControls");
+    if (controls) {
+      controls.enabled = false;
+    }
+
+    // Show game over message
+    this.uimanager.ShowGameOver();
+
+    // Return to main menu after delay
+    setTimeout(() => {
+      // Get the main game app instance through the window._APP
+      if (window._APP) {
+        document.getElementById("game_hud").style.visibility = "hidden";
+        document.getElementById("menu").style.visibility = "visible";
+
+        // Play menu music
+        const menuMusic = document.getElementById("menu_music");
+        if (menuMusic) {
+          menuMusic.currentTime = 0;
+          menuMusic.play();
+        } // Reset player state for next game
         this.health = 100;
-    }
+        this.isDead = false;
 
-    TakeHit = e =>{
-        this.health = Math.max(0, this.health - 10);
-        this.uimanager.SetHealth(this.health);
-    }
+        // Reset score
+        if (this.uimanager) {
+          this.uimanager.ResetScore();
+        }
 
-    Initialize(){
-        this.uimanager = this.FindEntity("UIManager").GetComponent("UIManager");
-        this.parent.RegisterEventHandler(this.TakeHit, "hit");
-        this.uimanager.SetHealth(this.health);
-    }
+        // Release pointer lock
+        document.exitPointerLock();
+      }
+    }, this.gameOverDelay);
+  }
+
+  Initialize() {
+    this.uimanager = this.FindEntity("UIManager").GetComponent("UIManager");
+    this.parent.RegisterEventHandler(this.TakeHit, "hit");
+    this.uimanager.SetHealth(this.health);
+  }
 }

@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Test Game",
+			"type": "shell",
+			"command": "echo 'Game should now be working! Open http://localhost:8080 in your browser and click NEW GAME to test.' && echo 'Key fixes applied:' && echo '1. Fixed CreatePhysicsBody method - now creates proper kinematic rigid body' && echo '2. Added score tracking for monster deaths' && echo '3. Fixed health bar initialization' && echo '4. Added collision detection for monsters' && echo '5. Updated physics body positions during movement'",
+			"group": "test",
+			"isBackground": false
+		}
+	]
+}

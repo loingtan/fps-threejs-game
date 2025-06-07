@@ -15,7 +15,6 @@ import Sky from "./entities/Sky/Sky2";
 import LevelSetup from "./entities/Level/LevelSetup";
 import PlayerControls from "./entities/Player/PlayerControls";
 import PlayerPhysics from "./entities/Player/PlayerPhysics";
-import Stats from "three/examples/jsm/libs/stats.module";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
@@ -24,7 +23,6 @@ import NpcCharacterController from "./entities/NPC/CharacterController";
 import Input from "./Input";
 
 import level from "./assets/level.glb";
-import officeMap from "./assets/office_map.glb";
 import navmesh from "./assets/navmesh.obj";
 
 import mutant from "./assets/animations/mutant.fbx";
@@ -65,6 +63,7 @@ import Weapon from "./entities/Player/Weapon";
 import UIManager from "./entities/UI/UIManager";
 import AmmoBox from "./entities/AmmoBox/AmmoBox";
 import LevelBulletDecals from "./entities/Level/BulletDecals";
+import MonsterSpawner from "./entities/Level/MonsterSpawner";
 import PlayerHealth from "./entities/Player/PlayerHealth";
 
 class FPSGameApp {
@@ -72,7 +71,6 @@ class FPSGameApp {
     this.lastFrameTime = null;
     this.assets = {};
     this.animFrameId = 0;
-    this.selectedMap = "level";
 
     AmmoHelper.Init(() => {
       this.Init();
@@ -85,26 +83,37 @@ class FPSGameApp {
     this.SetupStartButton();
     this.SetupMapButtons();
   }
-
   SetupGraphics() {
     this.scene = new THREE.Scene();
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.renderer.toneMapping = THREE.ReinhardToneMapping;
-    this.renderer.toneMappingExposure = 1;
+    // Check if we're likely on a mobile device
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: false, // Disable antialiasing for better performance
+      powerPreference: isMobile ? "low-power" : "high-performance",
+      precision: isMobile ? "mediump" : "highp", // Lower precision on mobile
+    });
+
+    // Reduce shadow quality on mobile
+    this.renderer.shadowMap.enabled = !isMobile;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // Use basic PCF instead of soft shadows    // Simplified renderer settings for better performance
+    this.renderer.toneMapping = THREE.NoToneMapping; // Disable tone mapping for performance
     this.renderer.outputEncoding = THREE.sRGBEncoding;
+
+    // Set a lower pixel ratio for better performance
+    const pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+    this.renderer.setPixelRatio(pixelRatio);
 
     this.camera = new THREE.PerspectiveCamera();
     this.camera.near = 0.01;
 
     // create an AudioListener and add it to the camera
     this.listener = new THREE.AudioListener();
-    this.camera.add(this.listener);
-
-    // renderer
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.camera.add(this.listener); // Pixel ratio is already set in tone mapping section above
 
     this.WindowResizeHanlder();
     window.addEventListener("resize", this.WindowResizeHanlder);
@@ -112,8 +121,7 @@ class FPSGameApp {
     document.body.appendChild(this.renderer.domElement);
 
     // Stats.js
-    this.stats = new Stats();
-    document.body.appendChild(this.stats.dom);
+    // document.body.appendChild(this.stats.dom); // REMOVE FPS WINDOW
   }
 
   SetupPhysics() {
@@ -134,11 +142,9 @@ class FPSGameApp {
     this.physicsWorld
       .getBroadphase()
       .getOverlappingPairCache()
-      .setInternalGhostPairCallback(new Ammo.btGhostPairCallback());
-
-    //  Physics debug drawer
+      .setInternalGhostPairCallback(new Ammo.btGhostPairCallback()); //  Physics debug drawer - disabled for performance
     this.debugDrawer = new DebugDrawer(this.scene, this.physicsWorld);
-    this.debugDrawer.enable();
+    // this.debugDrawer.enable();
   }
 
   SetAnim(name, obj) {
@@ -194,24 +200,9 @@ class FPSGameApp {
       }
     }
   }
-
   SetupMapButtons() {
-    const levelBtn = document.getElementById("select_level");
-    const officeBtn = document.getElementById("select_office");
-    if (levelBtn) {
-      levelBtn.addEventListener("click", () => {
-        this.selectedMap = "level";
-        levelBtn.style.fontWeight = "bold";
-        officeBtn.style.fontWeight = "normal";
-      });
-    }
-    if (officeBtn) {
-      officeBtn.addEventListener("click", () => {
-        this.selectedMap = "office";
-        officeBtn.style.fontWeight = "bold";
-        levelBtn.style.fontWeight = "normal";
-      });
-    }
+    // Map selection functionality removed - only using level map
+    this.selectedMap = "level";
   }
 
   async LoadAssets() {
@@ -220,14 +211,8 @@ class FPSGameApp {
     const objLoader = new OBJLoader();
     const audioLoader = new THREE.AudioLoader();
     const texLoader = new THREE.TextureLoader();
-    const promises = [];
-
-    //Level or Office
-    if (this.selectedMap === "office") {
-      promises.push(this.AddAsset(officeMap, gltfLoader, "level"));
-    } else {
-      promises.push(this.AddAsset(level, gltfLoader, "level"));
-    }
+    const promises = []; //Level only
+    promises.push(this.AddAsset(level, gltfLoader, "level"));
     promises.push(this.AddAsset(navmesh, objLoader, "navmesh"));
     //Mutant
     promises.push(this.AddAsset(mutant, fbxLoader, "mutant"));
@@ -268,23 +253,26 @@ class FPSGameApp {
     this.SetAnim("attack", this.assets["attackAnim"]);
     this.SetAnim("die", this.assets["dieAnim"]);
 
-    this.assets["ak47"].scene.animations = this.assets["ak47"].animations;
+    this.assets["ak47"].scene.animations = this.assets["ak47"].animations; //Set ammo box textures and other props
+    this.assets["ammobox"].scale.set(0.08, 0.08, 0.08);
 
-    //Set ammo box textures and other props
-    this.assets["ammobox"].scale.set(0.01, 0.01, 0.01);
+    // Create a shared optimized material for better performance
+    const ammoBoxMaterial = new THREE.MeshStandardMaterial({
+      map: this.assets["ammoboxTexD"],
+      // Remove aoMap for better performance
+      normalMap: this.assets["ammoboxTexN"],
+      metalness: 0.8, // Reduced metalness
+      metalnessMap: this.assets["ammoboxTexM"],
+      roughnessMap: this.assets["ammoboxTexR"],
+      color: new THREE.Color(0.4, 0.4, 0.4),
+    });
+
     this.assets["ammobox"].traverse((child) => {
-      child.castShadow = true;
-      child.receiveShadow = true;
-
-      child.material = new THREE.MeshStandardMaterial({
-        map: this.assets["ammoboxTexD"],
-        aoMap: this.assets["ammoboxTexAO"],
-        normalMap: this.assets["ammoboxTexN"],
-        metalness: 1,
-        metalnessMap: this.assets["ammoboxTexM"],
-        roughnessMap: this.assets["ammoboxTexR"],
-        color: new THREE.Color(0.4, 0.4, 0.4),
-      });
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.material = ammoBoxMaterial;
+      }
     });
 
     this.assets["ammoboxShape"] = createConvexHullShape(this.assets["ammobox"]);
@@ -310,34 +298,36 @@ class FPSGameApp {
         this.assets["decalAlpha"]
       )
     );
-    this.entityManager.Add(levelEntity);
-    // Tạo nhiều mutant random đơn giản
+    this.entityManager.Add(levelEntity); // Tạo một số lượng nhỏ mutant ở các vị trí cụ thể để tránh va chạm
     if (this.assets["mutant"] && this.mutantAnims) {
-        // Tạo 5 mutant ở vị trí random
-        for(let i = 0; i < 5; i++) {
-            const mutantEntity = new Entity();
-            
-            // Random position trong khoảng -20 đến 20
-            const x = (Math.random() - 0.5) * 40;
-            const z = (Math.random() - 0.5) * 40;
-            mutantEntity.SetPosition(new THREE.Vector3(x, 0, z));
-            mutantEntity.SetName(`Mutant_${i}`);
-            
-            mutantEntity.AddComponent(
-                new NpcCharacterController(
-                    SkeletonUtils.clone(this.assets["mutant"]),
-                    this.mutantAnims,
-                    this.scene,
-                    this.physicsWorld
-                )
-            );
-            mutantEntity.AddComponent(new AttackTrigger(this.physicsWorld));
-            mutantEntity.AddComponent(new CharacterCollision(this.physicsWorld));
-            mutantEntity.AddComponent(new DirectionDebug(this.scene));
-            
-            this.entityManager.Add(mutantEntity);
-        }
-        console.log("Created 5 random mutants");
+      // Tạo 3 mutant ở vị trí cụ thể
+      const mutantPositions = [
+        new THREE.Vector3(15, 0, 15),
+        new THREE.Vector3(-15, 0, -15),
+        new THREE.Vector3(10, 0, -10),
+      ];
+
+      for (let i = 0; i < mutantPositions.length; i++) {
+        const mutantEntity = new Entity();
+        mutantEntity.SetPosition(mutantPositions[i]);
+        mutantEntity.SetName(`Mutant_${i}`);
+
+        mutantEntity.AddComponent(
+          new NpcCharacterController(
+            SkeletonUtils.clone(this.assets["mutant"]),
+            this.mutantAnims,
+            this.scene,
+            this.physicsWorld
+          )
+        );
+        mutantEntity.AddComponent(new AttackTrigger(this.physicsWorld));
+        mutantEntity.AddComponent(new CharacterCollision(this.physicsWorld));
+        // Remove direction debug for better performance
+        // mutantEntity.AddComponent(new DirectionDebug(this.scene));
+
+        this.entityManager.Add(mutantEntity);
+      }
+      console.log("Created mutants at specific positions");
     }
 
     const skyEntity = new Entity();
@@ -360,11 +350,7 @@ class FPSGameApp {
       )
     );
     playerEntity.AddComponent(new PlayerHealth());
-    if (this.selectedMap === "office") {
-      playerEntity.SetPosition(new THREE.Vector3(0, 1.5, 0));
-    } else {
-      playerEntity.SetPosition(new THREE.Vector3(2.14, 1.48, -1.36));
-    }
+    playerEntity.SetPosition(new THREE.Vector3(2.14, 1.48, -1.36));
     playerEntity.SetRotation(
       new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0, 1, 0),
@@ -389,14 +375,28 @@ class FPSGameApp {
       );
       npcEntity.AddComponent(new AttackTrigger(this.physicsWorld));
       npcEntity.AddComponent(new CharacterCollision(this.physicsWorld));
-      npcEntity.AddComponent(new DirectionDebug(this.scene));
+      // Removed DirectionDebug for better performance
       this.entityManager.Add(npcEntity);
     });
-
     const uimanagerEntity = new Entity();
     uimanagerEntity.SetName("UIManager");
     uimanagerEntity.AddComponent(new UIManager());
     this.entityManager.Add(uimanagerEntity);
+
+    // Add MonsterSpawner for infinite spawning
+    const spawnerEntity = new Entity();
+    spawnerEntity.SetName("MonsterSpawner");
+    const navmeshComponent = levelEntity.GetComponent("Navmesh");
+    spawnerEntity.AddComponent(
+      new MonsterSpawner(
+        this.assets["mutant"],
+        this.mutantAnims,
+        this.scene,
+        this.physicsWorld,
+        navmeshComponent
+      )
+    );
+    this.entityManager.Add(spawnerEntity);
 
     const ammoLocations = [
       [14.37, 0.0, 10.45],
@@ -447,17 +447,25 @@ class FPSGameApp {
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
   };
-
-  // render loop
+  // render loop with FPS limiting for better consistency
   OnAnimationFrameHandler = (t) => {
     if (this.lastFrameTime === null) {
       this.lastFrameTime = t;
+      this.animFrameId = window.requestAnimationFrame(
+        this.OnAnimationFrameHandler
+      );
+      return;
     }
 
-    const delta = t - this.lastFrameTime;
-    let timeElapsed = Math.min(1.0 / 30.0, delta * 0.001);
-    this.Step(timeElapsed);
-    this.lastFrameTime = t;
+    const delta = t - this.lastFrameTime; // Target 60 FPS (16.67ms per frame) for better responsiveness
+    const targetFrameTime = 1000 / 60; // ms per frame
+
+    if (delta >= targetFrameTime) {
+      // Process frame with consistent timestep
+      let timeElapsed = Math.min(1.0 / 30.0, delta * 0.001);
+      this.Step(timeElapsed);
+      this.lastFrameTime = t;
+    }
 
     this.animFrameId = window.requestAnimationFrame(
       this.OnAnimationFrameHandler
@@ -467,19 +475,26 @@ class FPSGameApp {
   PhysicsUpdate = (world, timeStep) => {
     this.entityManager.PhysicsUpdate(world, timeStep);
   };
-
   Step(elapsedTime) {
-    this.physicsWorld.stepSimulation(elapsedTime, 10);
+    this.physicsWorld.stepSimulation(elapsedTime, 3); // Reduce sub-steps from 10 to 3
     //this.debugDrawer.update();
 
     this.entityManager.Update(elapsedTime);
-
+    // Force UIManager update for score sync
+    const uiEntity = this.entityManager.Get("UIManager");
+    if (uiEntity) {
+      const ui = uiEntity.GetComponent("UIManager");
+      if (ui && typeof ui.Update === "function") {
+        ui.Update();
+      }
+    }
     this.renderer.render(this.scene, this.camera);
-    this.stats.update();
+    // this.stats.update(); // REMOVE: stats window is gone, avoid freeze
   }
 }
 
 let _APP = null;
 window.addEventListener("DOMContentLoaded", () => {
   _APP = new FPSGameApp();
+  window._APP = _APP; // Expose app instance globally for game over handling
 });
