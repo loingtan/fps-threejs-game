@@ -3,6 +3,7 @@ import Component from "../../Component";
 import { Ammo, AmmoHelper, CollisionFilterGroups } from "../../AmmoLib";
 import CharacterFSM from "./CharacterFSM";
 import MonsterHealthBar from "./MonsterHealthBar";
+import ObstacleAvoidance from "./AvoidObstacles"; // Add import for the obstacle avoidance helper
 
 import DebugShapes from "../../DebugShapes";
 
@@ -28,8 +29,9 @@ export default class CharacterController extends Component {
 
     this.canMove = true;
     this.health = 100;
+    this.isDying = false; // Flag to prevent multiple death events
+    this.obstacleAvoidance = null; // Will be initialized later
     // this.maxHealth = 100;
-
   }
 
   SetAnim(name, clip) {
@@ -45,6 +47,7 @@ export default class CharacterController extends Component {
   Initialize() {
     try {
       this.stateMachine = new CharacterFSM(this);
+      this.obstacleAvoidance = new ObstacleAvoidance(this.physicsWorld); // Initialize obstacle avoidance
 
       const levelEntity = this.FindEntity("Level");
       if (levelEntity) {
@@ -226,16 +229,15 @@ export default class CharacterController extends Component {
     const currentPos = this.model.position.clone();
     currentPos.y += 0.9; // Monster center height
     const targetPos = newPosition.clone();
-    targetPos.y += 0.9;
-
-    // Check level boundaries - prevent monsters from going outside the play area
+    targetPos.y += 0.9; // Check level boundaries - prevent monsters from going outside the play area
+    // Using stricter boundaries to keep monsters well inside the playable area
     const levelBounds = {
-      minX: -50,
-      maxX: 50,
-      minZ: -50,
-      maxZ: 50,
-      minY: -5,
-      maxY: 20,
+      minX: -40, // Tighter boundaries (was -50)
+      maxX: 40, // Tighter boundaries (was 50)
+      minZ: -40, // Tighter boundaries (was -50)
+      maxZ: 40, // Tighter boundaries (was 50)
+      minY: 0, // Don't go below ground (was -5)
+      maxY: 15, // Lower height limit (was 20)
     };
 
     if (
@@ -246,7 +248,12 @@ export default class CharacterController extends Component {
       newPosition.y < levelBounds.minY ||
       newPosition.y > levelBounds.maxY
     ) {
-      console.log("Monster blocked by level boundaries");
+      console.log(
+        "Monster blocked by level boundaries, attempting to move back to safe zone"
+      );
+
+      // Instead of just blocking, force the monster to move back inside boundary
+      this.ForceReturnToValidArea();
       return false;
     }
 
@@ -256,6 +263,15 @@ export default class CharacterController extends Component {
       return false;
     }
 
+    // Create multiple raycasts for more accurate collision detection
+    const rayOrigins = [
+      currentPos.clone(),
+      currentPos.clone().add(new THREE.Vector3(0.3, 0, 0)),
+      currentPos.clone().add(new THREE.Vector3(-0.3, 0, 0)),
+      currentPos.clone().add(new THREE.Vector3(0, 0, 0.3)),
+      currentPos.clone().add(new THREE.Vector3(0, 0, -0.3)),
+    ];
+
     const rayInfo = {
       intersectionPoint: new THREE.Vector3(),
       intersectionNormal: new THREE.Vector3(),
@@ -263,31 +279,86 @@ export default class CharacterController extends Component {
     const collisionMask =
       CollisionFilterGroups.AllFilter & ~CollisionFilterGroups.SensorTrigger;
 
-    // Cast ray from current position to new position
-    if (
-      AmmoHelper.CastRay(
-        this.physicsWorld,
-        currentPos,
-        targetPos,
-        rayInfo,
-        collisionMask
-      )
-    ) {
-      const hitBody = Ammo.castObject(
-        rayInfo.collisionObject,
-        Ammo.btRigidBody
-      );
-      const playerBody = this.player?.GetComponent("PlayerPhysics")?.body;
+    // Check multiple raycasts to detect collisions from different angles
+    for (const rayOrigin of rayOrigins) {
+      if (
+        AmmoHelper.CastRay(
+          this.physicsWorld,
+          rayOrigin,
+          targetPos,
+          rayInfo,
+          collisionMask
+        )
+      ) {
+        const hitBody = Ammo.castObject(
+          rayInfo.collisionObject,
+          Ammo.btRigidBody
+        );
+        const playerBody = this.player?.GetComponent("PlayerPhysics")?.body;
 
-      // Allow movement if we hit the player, but block if we hit level geometry
-      if (hitBody && hitBody !== playerBody && hitBody !== this.physicsBody) {
-        // Check if the collision is close enough to matter
-        const distance = currentPos.distanceTo(rayInfo.intersectionPoint);
-        if (distance < 1.0) {
-          // Stricter collision detection
-          console.log("Monster blocked by obstacle at distance:", distance);
-          return false;
+        // Allow movement if we hit the player, but block if we hit level geometry or containers
+        if (hitBody && hitBody !== playerBody && hitBody !== this.physicsBody) {
+          // Use a smaller distance threshold to improve collision detection with containers
+          const distance = rayOrigin.distanceTo(rayInfo.intersectionPoint);
+          if (distance < 1.5) {
+            console.log("Monster blocked by obstacle at distance:", distance);
+            return false;
+          }
         }
+      }
+    }
+
+    // Check for obstacles ahead using a sphere cast
+    const movementDirection = targetPos.clone().sub(currentPos).normalize();
+    const sphereRadius = 0.6; // Increased monster "width" for better collision detection
+    const sphereCastRange = 1.2; // Increased distance ahead to check for obstacles
+
+    // Calculate sphere cast end point
+    const sphereEnd = currentPos
+      .clone()
+      .add(movementDirection.clone().multiplyScalar(sphereCastRange));
+
+    // Create a transform for sphere cast start
+    const startTransform = new Ammo.btTransform();
+    startTransform.setIdentity();
+    startTransform
+      .getOrigin()
+      .setValue(currentPos.x, currentPos.y, currentPos.z);
+
+    // Create a transform for sphere cast end
+    const endTransform = new Ammo.btTransform();
+    endTransform.setIdentity();
+    endTransform.getOrigin().setValue(sphereEnd.x, sphereEnd.y, sphereEnd.z);
+
+    // Create sphere shape for casting
+    const sphereShape = new Ammo.btSphereShape(sphereRadius);
+
+    // Perform sphere cast
+    const castResult = new Ammo.btCollisionWorld.ClosestConvexResultCallback(
+      startTransform.getOrigin(),
+      endTransform.getOrigin()
+    );
+
+    // Exclude sensor triggers from collision detection
+    castResult.m_collisionFilterMask = collisionMask;
+
+    // Perform convex sweep test
+    this.physicsWorld.convexSweepTest(
+      sphereShape,
+      startTransform,
+      endTransform,
+      castResult
+    );
+
+    // Check if we hit anything
+    if (castResult.hasHit()) {
+      const hitDistance = castResult.m_closestHitFraction * sphereCastRange;
+      if (hitDistance < 0.8) {
+        console.log(
+          "Monster blocked by obstacle detected in sphere cast, distance:",
+          hitDistance
+        );
+        return false;
       }
     }
 
@@ -334,8 +405,51 @@ export default class CharacterController extends Component {
     return false;
   }
   NavigateToRandomPoint() {
-    const node = this.navmesh.GetRandomNode(this.model.position, 50);
-    this.path = this.navmesh.FindPath(this.model.position, node);
+    // No random patrolling - monsters should stay in place until they see the player
+    this.ClearPath();
+    return;
+
+    // Original behavior (disabled)
+    // const node = this.navmesh.GetRandomNode(this.model.position, 50);
+    // this.path = this.navmesh.FindPath(this.model.position, node);
+  }
+
+  // New method to check for obstacles in the monster's path
+  HasObstacleInPath(fromPosition, toPosition) {
+    // Don't check if physics world is not available
+    if (!this.physicsWorld) return false;
+
+    const rayInfo = {};
+    const collisionMask =
+      CollisionFilterGroups.AllFilter & ~CollisionFilterGroups.SensorTrigger;
+
+    // Cast a ray from the monster to the target position
+    if (
+      AmmoHelper.CastRay(
+        this.physicsWorld,
+        fromPosition,
+        toPosition,
+        rayInfo,
+        collisionMask
+      )
+    ) {
+      const hitBody = Ammo.castObject(
+        rayInfo.collisionObject,
+        Ammo.btRigidBody
+      );
+      const playerBody = this.player?.GetComponent("PlayerPhysics")?.body;
+
+      // If we hit anything other than the player or self, there's an obstacle
+      if (hitBody && hitBody !== playerBody && hitBody !== this.physicsBody) {
+        const distance = fromPosition.distanceTo(rayInfo.intersectionPoint);
+        if (distance < toPosition.distanceTo(fromPosition)) {
+          // Obstacle detected before reaching target
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
   IsPositionValid(position) {
     if (!this.navmesh) return true; // If no navmesh, allow movement
@@ -361,7 +475,7 @@ export default class CharacterController extends Component {
     }
 
     // FIX: Thay vì tìm EntityManager, dùng pathfinding trực tiếp
-    if (!this.navmesh_) {
+    if (!this.navmesh) {
       console.warn("Navmesh not found for navigation");
       return;
     }
@@ -369,31 +483,53 @@ export default class CharacterController extends Component {
     const playerPosition = player.Position;
     const currentPosition = this.parent.Position;
 
-    // Calculate simple direct path nếu không có EntityManager
+    // Calculate simple direct path
     const direction = new THREE.Vector3()
       .subVectors(playerPosition, currentPosition)
       .normalize();
 
-    // Move towards player với simple pathfinding
-    const moveDistance = 5.0; // Adjust as needed
-    const targetPosition = currentPosition.clone().add(
-      direction.multiplyScalar(moveDistance)
-    );
+    // Move towards player with improved pathfinding
+    const moveDistance = 5.0;
 
-    // Validate position trước khi move
+    // Try to find a better path using navmesh
+    const targetPosition = currentPosition
+      .clone()
+      .add(direction.multiplyScalar(moveDistance));
+
+    // Check if path is valid and doesn't go through obstacles
     if (this.IsPositionValid(targetPosition)) {
-      this.path = [currentPosition.clone(), targetPosition];
-      console.log(`Monster ${this.parent.name} navigating towards player`);
+      // Create additional waypoints to better navigate around obstacles
+      this.path = [currentPosition.clone()];
+
+      // Try to generate a series of waypoints to player
+      try {
+        const navPath = this.navmesh.FindPath(currentPosition, playerPosition);
+        if (navPath && navPath.length > 0) {
+          this.path = navPath;
+          console.log(
+            `Monster ${this.parent.name} using navmesh path to player`
+          );
+        } else {
+          // Fallback to direct path if navmesh path failed
+          this.path.push(targetPosition);
+          console.log(
+            `Monster ${this.parent.name} using direct path to player`
+          );
+        }
+      } catch (e) {
+        // If navmesh pathing fails, use direct path
+        this.path.push(targetPosition);
+        console.log(
+          `Monster ${this.parent.name} using direct path to player (navmesh error)`
+        );
+      }
     } else {
-      // Nếu không thể move thẳng, thử random direction
+      // If we can't move directly to the player, try to find another valid position
+      console.log(
+        `Monster ${this.parent.name} cannot directly navigate to player, finding alternative`
+      );
       this.NavigateToRandomPoint();
     }
-
-    // REMOVE: Bỏ phần tìm EntityManager gây lỗi
-    // if (!this.parent || !this.parent.entityManager) {
-    //   console.warn("EntityManager not found");
-    //   return;
-    // }
   }
 
   // THÊM: Backup method nếu cần EntityManager
@@ -406,12 +542,12 @@ export default class CharacterController extends Component {
       }
       current = current.parent;
     }
-    
+
     // Thử tìm qua global app
     if (window._APP && window._APP.entityManager) {
       return window._APP.entityManager;
     }
-    
+
     return null;
   }
 
@@ -477,22 +613,52 @@ export default class CharacterController extends Component {
         }, 50);
       }
     }
+    if (this.health == 0 && !this.isDying) {
+      // Set the isDying flag to prevent multiple death events
+      this.isDying = true;
 
-    if (this.health == 0) {
       this.stateMachine.SetState("dead");
       // Make the health bar disappear instantly when dead
       if (this.healthBar && this.healthBar.container) {
         this.healthBar.container.visible = false;
-      } // Try to get entityManager from various possible sources
-      const entityManager =
-        (this.parent && this.parent.entityManager) ||
-        (this.parent && this.parent.parent) ||
-        (this.FindEntity &&
-          this.FindEntity("UIManager") &&
-          this.FindEntity("UIManager").parent);
+      }
 
+      console.log("Monster died! Attempting to broadcast monster_death event");
+
+      // First try to get the entityManager directly from the parent
+      let entityManager = null;
+
+      if (this.parent && this.parent.entityManager) {
+        entityManager = this.parent.entityManager;
+        console.log("Found entityManager directly on parent");
+      } else if (this.FindEntity && this.FindEntity("Level")) {
+        const level = this.FindEntity("Level");
+        if (level && level.entityManager) {
+          entityManager = level.entityManager;
+          console.log("Found entityManager on Level entity");
+        }
+      }
       if (entityManager && entityManager.BroadcastGlobalEvent) {
-        console.log("Broadcasting monster_death event from:", this.parent.name);
+        // Ensure monster has a unique name and ID if it doesn't already
+        if (!this.parent.name) {
+          const uniqueId = `Monster_${Date.now()}_${Math.floor(
+            Math.random() * 10000
+          )}`;
+          this.parent.SetName(uniqueId);
+        }
+
+        // Add a unique ID property if not present
+        if (!this.parent.id) {
+          this.parent.id = `${this.parent.name}_${Date.now()}`;
+        }
+
+        console.log(
+          "Broadcasting monster_death event from:",
+          this.parent.name,
+          "with ID:",
+          this.parent.id
+        );
+        // Broadcast event only once through the entity manager
         entityManager.BroadcastGlobalEvent({
           type: "monster_death",
           monster: this.parent,
@@ -501,17 +667,7 @@ export default class CharacterController extends Component {
         console.error(
           "Cannot broadcast monster_death event, entityManager not found"
         );
-        // Try direct access to UIManager as fallback
-        const uiManager = this.FindEntity("UIManager");
-        if (uiManager) {
-          const uiManagerComponent = uiManager.GetComponent("UIManager");
-          if (uiManagerComponent && uiManagerComponent.AddScore) {
-            console.log(
-              "Direct fallback: adding score via UIManager component"
-            );
-            uiManagerComponent.AddScore(1);
-          }
-        }
+        // No direct fallback to UIManager to avoid duplicate score counting
       }
       console.log(`Monster ${this.parent.name} has died, removing from scene`);
       setTimeout(() => {
@@ -522,62 +678,77 @@ export default class CharacterController extends Component {
         }
       }, 2000);
     } else {
-      const stateName = this.stateMachine.currentState.Name;
-      if (stateName == "idle" || stateName == "patrol") {
+      // Always switch to chase when hit by player, regardless of current state
+      // This makes monsters more responsive to player attacks
+      if (this.stateMachine) {
+        console.log(`Monster ${this.parent.name} was hit, now chasing player`);
         this.stateMachine.SetState("chase");
+
+        // Immediately clear and set path to chase player when hit
+        this.NavigateToPlayer();
       }
     }
   };
 
   // THÊM: Method tính điểm khi giết quái
   CalculateKillScore() {
-  console.log("=== CALCULATING KILL SCORE ===");
-  
-  const player = this.FindEntity("Player");
-  if (!player) {
-    console.warn("Player not found for score calculation");
-    return;
-  }
+    console.log("=== CALCULATING KILL SCORE ===");
 
-  const playerHealth = player.GetComponent("PlayerHealth");
-  if (!playerHealth) {
-    console.warn("PlayerHealth component not found for score calculation");
-    return;
-  }
+    const player = this.FindEntity("Player");
+    if (!player) {
+      console.warn("Player not found for score calculation");
+      return;
+    }
+    const playerHealth = player.GetComponent("PlayerHealth");
+    if (!playerHealth) {
+      console.warn("PlayerHealth component not found for score calculation");
+      return;
+    }
 
-  const playerHealthPercent = playerHealth.GetHealthPercent();
-  const scoreEarned = Math.floor(100 * playerHealthPercent);
-  
-  console.log(`Player health: ${playerHealth.health}/${playerHealth.maxHealth} (${(playerHealthPercent * 100).toFixed(1)}%)`);
-  console.log(`Score earned for killing ${this.parent.name}: ${scoreEarned} points`);
-  
-  // SỬA: Broadcast qua entity manager
-  const eventData = {
-    type: 'monster_killed',
-    scoreEarned: scoreEarned,
-    playerHealthPercent: playerHealthPercent,
-    monsterName: this.parent.name
-  };
-  
-  console.log("Broadcasting event:", eventData);
-  
-  // Thử cả 2 cách
-  if (this.parent && this.parent.entityManager) {
-    this.parent.entityManager.BroadcastGlobalEvent(eventData);
-    console.log("Event broadcasted via entityManager");
-  }
-  
-  // Backup: Direct call to UIManager
-  const uiEntity = this.FindEntity("UIManager");
-  if (uiEntity) {
-    const uiManager = uiEntity.GetComponent("UIManager");
-    if (uiManager && uiManager.OnMonsterKilled) {
-      uiManager.OnMonsterKilled(eventData);
-      console.log("Event sent directly to UIManager");
+    // Updated score formula: current character health * 0.5 + 1
+    const currentHealth = playerHealth.health || 0;
+    const scoreEarned = Math.floor(currentHealth * 0.5 + 1);
+    const playerHealthPercent = playerHealth.GetHealthPercent();
+
+    console.log(
+      `Player health: ${currentHealth}/${playerHealth.maxHealth} (${(
+        playerHealthPercent * 100
+      ).toFixed(1)}%)`
+    );
+    console.log(
+      `Score earned for killing ${
+        this.parent.name
+      }: ${scoreEarned} points (calculated as: ${currentHealth} * 0.5 + 1 = ${
+        currentHealth * 0.5 + 1
+      })`
+    );
+
+    // SỬA: Broadcast qua entity manager
+    const eventData = {
+      type: "monster_killed",
+      scoreEarned: scoreEarned,
+      playerHealthPercent: playerHealthPercent,
+      monsterName: this.parent.name,
+    };
+
+    console.log("Broadcasting event:", eventData);
+
+    // Thử cả 2 cách
+    if (this.parent && this.parent.entityManager) {
+      this.parent.entityManager.BroadcastGlobalEvent(eventData);
+      console.log("Event broadcasted via entityManager");
+    }
+
+    // Backup: Direct call to UIManager
+    const uiEntity = this.FindEntity("UIManager");
+    if (uiEntity) {
+      const uiManager = uiEntity.GetComponent("UIManager");
+      if (uiManager && uiManager.OnMonsterKilled) {
+        uiManager.OnMonsterKilled(eventData);
+        console.log("Event sent directly to UIManager");
+      }
     }
   }
-}
-
   MoveAlongPath(t) {
     // Check if path exists and has elements, also verify model exists
     if (!this.path?.length || !this.model || !this.model.position) return;
@@ -601,16 +772,20 @@ export default class CharacterController extends Component {
         const otherPos = monsterController.model.position.clone();
         const distanceToOtherMonster = myPos.distanceTo(otherPos);
 
-        // If another monster is too close, add an avoidance vector
-        if (distanceToOtherMonster < 2.0) {
+        // If another monster is too close, add a stronger avoidance vector
+        if (distanceToOtherMonster < 3.0) {
           const avoidanceDirection = myPos.clone().sub(otherPos).normalize();
-          const strength = 1.0 - distanceToOtherMonster / 2.0; // Stronger as they get closer
+          const strength = 1.0 - distanceToOtherMonster / 3.0; // Stronger as they get closer
           avoidanceFactor.add(
-            avoidanceDirection.multiplyScalar(strength * 0.3)
+            avoidanceDirection.multiplyScalar(strength * 0.6) // Increased strength
           );
         }
       }
     }
+
+    // Check for obstacles in the scene
+    const obstacleAvoidance = this.AvoidObstacles(myPos);
+    avoidanceFactor.add(obstacleAvoidance);
 
     const target = this.path[0].clone().sub(this.model.position);
     target.y = 0.0;
@@ -618,47 +793,74 @@ export default class CharacterController extends Component {
     if (target.lengthSq() > 0.1 * 0.1) {
       target.normalize();
       this.tempRot.setFromUnitVectors(this.forwardVec, target);
-      this.model.quaternion.slerp(this.tempRot, 4.0 * t); // Add direct movement to actually move the model towards target
+      this.model.quaternion.slerp(this.tempRot, 4.0 * t);
+
       if (this.canMove) {
+        // Slower walking speed, faster chase speed
         const speed =
-          this.stateMachine.currentState.Name === "chase" ? 0.15 : 0.08; // Increased chase speed
+          this.stateMachine.currentState.Name === "chase" ? 0.12 : 0.06;
 
         // Apply avoidance to prevent overlapping
         let movement = target.clone();
 
-        // Add avoidance factor if there are nearby monsters
+        // Add avoidance factor if there are nearby monsters or obstacles
         if (avoidanceFactor.lengthSq() > 0) {
           movement.add(avoidanceFactor);
           movement.normalize();
-        }
+        } // Make monsters move more slowly to avoid passing through objects
+        // Further reduced movement speed for better collision handling
+        const reducedSpeed =
+          this.stateMachine.currentState.Name === "chase" ? 0.06 : 0.03;
+        movement.multiplyScalar(reducedSpeed);
 
-        movement.multiplyScalar(speed);
+        // Store original position before movement attempt
+        const originalPosition = this.model.position.clone();
 
-        // Try to move with enhanced validation
-        const newPosition = this.model.position.clone().add(movement);
+        // Try to move with enhanced validation and slower smaller steps
+        // This helps prevent monsters from going through obstacles
+        const newPosition = originalPosition.clone().add(movement);
 
-        // Use stricter validation for better boundary control
+        // Do a more thorough collision check before moving
         const canMove = this.CheckCollision(newPosition);
 
         if (canMove) {
           this.model.position.add(movement);
         } else {
-          // If blocked, try alternative movement directions
-          const alternatives = [
-            movement.clone().multiplyScalar(0.5), // Smaller step
-            movement
-              .clone()
-              .applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 4), // Turn right
-            movement
-              .clone()
-              .applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 4), // Turn left
-          ];
+          // More advanced collision handling
+          // Try 8 different directions with varying angles
+          const attemptDirections = [];
+          for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+            attemptDirections.push(
+              movement
+                .clone()
+                .applyAxisAngle(new THREE.Vector3(0, 1, 0), angle)
+                .multiplyScalar(0.7) // Reduced step size for safer movement
+            );
+          }
 
-          for (const altMovement of alternatives) {
-            const altPosition = this.model.position.clone().add(altMovement);
+          // Try each alternative direction
+          let moved = false;
+          for (const altMovement of attemptDirections) {
+            const altPosition = originalPosition.clone().add(altMovement);
             if (this.CheckCollision(altPosition)) {
               this.model.position.add(altMovement);
+              moved = true;
               break;
+            }
+          }
+
+          // If still can't move, try a very small step
+          if (!moved) {
+            const tinyStep = movement.clone().multiplyScalar(0.2);
+            const tinyPosition = originalPosition.clone().add(tinyStep);
+            if (this.CheckCollision(tinyPosition)) {
+              this.model.position.add(tinyStep);
+            } else {
+              // If completely stuck, force return to valid area
+              console.log(
+                "Monster completely stuck, trying to find valid area"
+              );
+              this.ForceReturnToValidArea();
             }
           }
         }
@@ -666,11 +868,76 @@ export default class CharacterController extends Component {
     } else {
       // Remove node from the path we calculated
       this.path.shift();
-
       if (this.path.length === 0) {
         this.Broadcast({ topic: "nav.end", agent: this });
       }
     }
+  }
+  // New method to detect and avoid scene obstacles like containers
+  AvoidObstacles(position) {
+    const avoidanceVector = new THREE.Vector3();
+    const raycastOrigins = [
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0.7, 0, 0.7),
+      new THREE.Vector3(0.7, 0, -0.7),
+      new THREE.Vector3(-0.7, 0, 0.7),
+      new THREE.Vector3(-0.7, 0, -0.7),
+    ];
+
+    const rayInfo = {
+      intersectionPoint: new THREE.Vector3(),
+      intersectionNormal: new THREE.Vector3(),
+    };
+
+    const collisionMask =
+      CollisionFilterGroups.AllFilter & ~CollisionFilterGroups.SensorTrigger;
+
+    // Cast rays in 8 directions to detect obstacles
+    for (const direction of raycastOrigins) {
+      const rayOrigin = position.clone();
+      rayOrigin.y += 0.9; // Monster's center height
+
+      const rayTarget = rayOrigin
+        .clone()
+        .add(direction.clone().multiplyScalar(2.0));
+
+      if (
+        AmmoHelper.CastRay(
+          this.physicsWorld,
+          rayOrigin,
+          rayTarget,
+          rayInfo,
+          collisionMask
+        )
+      ) {
+        const hitBody = Ammo.castObject(
+          rayInfo.collisionObject,
+          Ammo.btRigidBody
+        );
+        const playerBody = this.player?.GetComponent("PlayerPhysics")?.body;
+
+        // If it's an obstacle (not player or self)
+        if (hitBody && hitBody !== playerBody && hitBody !== this.physicsBody) {
+          const distance = rayOrigin.distanceTo(rayInfo.intersectionPoint);
+
+          // Only care about close obstacles
+          if (distance < 1.8) {
+            // Add avoidance force opposite to the obstacle
+            const strength = 1.0 - distance / 1.8;
+            const avoidDir = rayOrigin
+              .clone()
+              .sub(rayInfo.intersectionPoint)
+              .normalize();
+            avoidanceVector.add(avoidDir.multiplyScalar(strength * 0.8));
+          }
+        }
+      }
+    }
+
+    return avoidanceVector;
   }
 
   ClearPath() {
@@ -809,5 +1076,53 @@ export default class CharacterController extends Component {
     } catch (error) {
       console.error("Error cleaning up monster resources:", error);
     }
+  }
+
+  // Force monster to return to valid play area if it wanders out of bounds
+  ForceReturnToValidArea() {
+    // Only proceed if we have a valid model position
+    if (!this.model || !this.model.position) return;
+
+    // Define safe boundaries (smaller than check boundaries to ensure return to safe area)
+    const safeBounds = {
+      minX: -30,
+      maxX: 30,
+      minZ: -30,
+      maxZ: 30,
+      minY: 1,
+      maxY: 10,
+    };
+
+    // Get current position
+    const currentPos = this.model.position.clone();
+
+    // Create a target position that's within safe bounds
+    const safePos = new THREE.Vector3(
+      Math.max(safeBounds.minX, Math.min(currentPos.x, safeBounds.maxX)),
+      Math.max(safeBounds.minY, Math.min(currentPos.y, safeBounds.maxY)),
+      Math.max(safeBounds.minZ, Math.min(currentPos.z, safeBounds.maxZ))
+    );
+
+    // If we're already in safe bounds, try to move toward map center
+    if (safePos.distanceTo(currentPos) < 0.1) {
+      // Move toward map center
+      const centerDirection = new THREE.Vector3(0, 1, 0)
+        .sub(currentPos)
+        .normalize();
+      safePos.add(centerDirection.multiplyScalar(5));
+    }
+
+    // Calculate direction toward safe position
+    const direction = safePos.clone().sub(currentPos).normalize();
+
+    // Set a new path to return to safe area
+    this.path = [currentPos.clone(), safePos];
+    console.log(
+      `Monster ${
+        this.parent?.name || "unknown"
+      } returning to safe area at ${safePos.x.toFixed(1)}, ${safePos.y.toFixed(
+        1
+      )}, ${safePos.z.toFixed(1)}`
+    );
   }
 }

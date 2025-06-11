@@ -164,6 +164,56 @@
         font-size: 1.5em;
         text-shadow: 0 0 5px #ff0000;
       }
+      #success_screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: #33ff33;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        font-family: "Roboto", sans-serif;
+        animation: success_pulse 2s infinite;
+      }
+      #success_screen h2 {
+        font-size: 4em;
+        margin-bottom: 20px;
+        text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+      }
+      #success_screen p {
+        font-size: 1.5em;
+        text-shadow: 0 0 5px #00ff00;
+      }
+      #success_screen button {
+        margin-top: 40px;
+        background-color: rgba(0, 255, 0, 0.2);
+        color: #33ff33;
+        border: 2px solid #33ff33;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 1.2em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      #success_screen button:hover {
+        background-color: rgba(0, 255, 0, 0.4);
+      }
+      @keyframes success_pulse {
+        0% {
+          text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+        }
+        50% {
+          text-shadow: 0 0 15px #33ff33, 0 0 30px #33ff33;
+        }
+        100% {
+          text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+        }
+      }
       @keyframes pulse {
         0% {
           text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
@@ -189,7 +239,7 @@
       ></audio>
       <div id="menu_buttons">
         <button id="start_game">NEW GAME</button>
-        <button id="continue_game">CONTINUE GAME</button>
+        <!-- <button id="continue_game">CONTINUE GAME</button> -->
       </div>
     </div>
     <div id="game_hud">
@@ -202,9 +252,13 @@
       <div id="health_container">
         <div id="health_progress"></div>
       </div>
-      <div id="score_container">Score: <span id="score">0</span></div>
     </div>
     <div id="progress"></div>
+    <div id="success_screen">
+      <h2>Game completed</h2>
+      <p>All monsters eliminated!</p>
+      <button id="return_to_menu">Return to Menu</button>
+    </div>
     <my-app></my-app>
   </body>
 </html>

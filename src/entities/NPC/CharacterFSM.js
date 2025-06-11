@@ -48,11 +48,10 @@ class IdleState extends State {
       Math.random() * (this.maxWaitTime - this.minWaitTime) + this.minWaitTime;
   }
   Update(t) {
-    if (this.waitTime <= 0.0) {
-      this.parent.SetState("patrol");
-      return;
-    }
+    // Stand still - don't switch to patrol state
+    // Completely removed transition to patrol state to ensure monsters stay still
 
+    // Decrement wait time but don't use it for state transitions
     this.waitTime -= t;
 
     // Check for player more frequently and with wider detection
@@ -60,12 +59,23 @@ class IdleState extends State {
       this.parent.proxy.player.Position
     );
 
-    // Start chasing if player is within detection range, even without direct line of sight
-    if (distanceToPlayer < 20 || this.parent.proxy.CanSeeThePlayer()) {
+    // Only start chasing if the monster can see the player directly
+    if (this.parent.proxy.CanSeeThePlayer()) {
       console.log(
         `Monster ${
           this.parent.proxy.parent.name
         } detected player at distance ${distanceToPlayer.toFixed(2)}`
+      );
+      this.parent.SetState("chase");
+    }
+    // Also chase if player gets very close even if not directly visible
+    else if (distanceToPlayer < 5) {
+      console.log(
+        `Monster ${
+          this.parent.proxy.parent.name
+        } detected player presence very close by at distance ${distanceToPlayer.toFixed(
+          2
+        )}`
       );
       this.parent.SetState("chase");
     }
@@ -75,6 +85,8 @@ class IdleState extends State {
 class PatrolState extends State {
   constructor(parent) {
     super(parent);
+    this.patrolTimer = 0; // Timer to return to idle state
+    this.maxPatrolTime = 3.0; // Maximum time to stay in patrol before returning to idle
   }
 
   get Name() {
@@ -87,10 +99,15 @@ class PatrolState extends State {
   PatrolEnd = () => {
     this.parent.SetState("idle");
   };
-
   Enter(prevState) {
-    this.parent.proxy.canMove = true;
+    // Force monsters to stand still by disabling movement
+    this.parent.proxy.canMove = false;
     const action = this.Animation.action;
+
+    // Reset patrol timer - we'll return to idle very quickly
+    this.patrolTimer = 0;
+    // Reduce max patrol time to make sure monsters quickly go back to idle
+    this.maxPatrolTime = 1.5;
 
     if (prevState) {
       action.time = 0.0;
@@ -100,16 +117,27 @@ class PatrolState extends State {
 
     action.play();
 
-    this.parent.proxy.NavigateToRandomPoint();
+    // Clear any path and don't navigate to random points - stay in place
+    this.parent.proxy.ClearPath();
   }
+
   Update(t) {
-    // Check for player more aggressively during patrol
+    // Increment patrol timer
+    this.patrolTimer += t;
+
+    // Return to idle after a short time
+    if (this.patrolTimer > this.maxPatrolTime) {
+      this.parent.SetState("idle");
+      return;
+    }
+
+    // Check for player with improved detection
     const distanceToPlayer = this.parent.proxy.model.position.distanceTo(
       this.parent.proxy.player.Position
     );
 
-    // Start chasing if player is close or visible
-    if (distanceToPlayer < 25 || this.parent.proxy.CanSeeThePlayer()) {
+    // Only chase if can see player directly, or player is very close
+    if (this.parent.proxy.CanSeeThePlayer()) {
       console.log(
         `Monster ${
           this.parent.proxy.parent.name
@@ -118,8 +146,13 @@ class PatrolState extends State {
         )}`
       );
       this.parent.SetState("chase");
-    } else if (this.parent.proxy.path && this.parent.proxy.path.length == 0) {
-      this.parent.SetState("idle");
+    } else if (distanceToPlayer < 7) {
+      console.log(
+        `Monster ${
+          this.parent.proxy.parent.name
+        } heard player very close by at distance ${distanceToPlayer.toFixed(2)}`
+      );
+      this.parent.SetState("chase");
     }
   }
 }

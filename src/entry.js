@@ -76,6 +76,7 @@ class FPSGameApp {
     this.lastFrameTime = null;
     this.assets = {};
     this.animFrameId = 0;
+    this.isGamePaused = false; // Add game pause state
 
     AmmoHelper.Init(() => {
       this.Init();
@@ -84,37 +85,36 @@ class FPSGameApp {
     window.teleportToNearestCookie = () => {
       const cookies = [];
       this.scene.traverse((object) => {
-        if (object.userData && object.userData.type === 'cookie') {
+        if (object.userData && object.userData.type === "cookie") {
           cookies.push(object);
         }
       });
-      
-    if (cookies.length > 0) {
-      const nearestCookie = cookies[0];
-      const player = this.entityManager.Get("Player");
-      if (player) {
-        const newPos = nearestCookie.position.clone();
-        newPos.y += 2; // Spawn above cookie
-        player.SetPosition(newPos);
-        console.log("Teleported to cookie at:", newPos);
+
+      if (cookies.length > 0) {
+        const nearestCookie = cookies[0];
+        const player = this.entityManager.Get("Player");
+        if (player) {
+          const newPos = nearestCookie.position.clone();
+          newPos.y += 2; // Spawn above cookie
+          player.SetPosition(newPos);
+          console.log("Teleported to cookie at:", newPos);
+        }
+      } else {
+        console.log("No cookies found!");
       }
-    } else {
-      console.log("No cookies found!");
-    }
-  };
-  
-    // Add list all cookies function  
+    };
+
+    // Add list all cookies function
     window.listCookies = () => {
       const cookies = [];
       this.scene.traverse((object) => {
-        if (object.userData && object.userData.type === 'cookie') {
+        if (object.userData && object.userData.type === "cookie") {
           cookies.push(object.position.clone());
         }
       });
       console.log("Cookie positions:", cookies);
       return cookies;
     };
-
   }
 
   Init() {
@@ -286,8 +286,6 @@ class FPSGameApp {
 
     this.assets["level"] = this.assets["level"].scene;
     this.assets["muzzleFlash"] = this.assets["muzzleFlash"].scene;
-
-
 
     //Extract mutant anims
     this.mutantAnims = {};
@@ -462,27 +460,27 @@ class FPSGameApp {
     });
     // DEBUG: Kiểm tra cookie asset
     console.log("Original cookie asset:", this.assets["cookie"]);
-    
+
     // CREATE SIMPLE COOKIE GEOMETRY thay vì dùng asset
     const cookieGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
-    const cookieMaterial = new THREE.MeshLambertMaterial({ 
-      color: 0xFFD700, // Gold color
-      emissive: 0x222200 // Slight glow
+    const cookieMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffd700, // Gold color
+      emissive: 0x222200, // Slight glow
     });
     const cookieMesh = new THREE.Mesh(cookieGeometry, cookieMaterial);
-    
+
     // Override cookie asset với geometry tự tạo
     this.assets["cookie"] = cookieMesh;
     console.log("Created custom cookie mesh:", this.assets["cookie"]);
 
     // CREATE MULTIPLE COOKIE SPAWNERS
     const numberOfSpawners = 3; // Tăng số này để có nhiều cookie cùng lúc
-    
+
     for (let i = 0; i < numberOfSpawners; i++) {
       const cookieSpawnerEntity = new Entity();
       cookieSpawnerEntity.SetName(`CookieSpawner_${i}`);
       const levelcookienavmeshComponent = levelEntity.GetComponent("Navmesh");
-      
+
       if (this.assets["cookie"]) {
         cookieSpawnerEntity.AddComponent(
           new CookieSpawner(
@@ -517,14 +515,46 @@ class FPSGameApp {
     this.ShowMenu(false);
   };
 
+  // pause the game (can be called from anywhere through window._APP)
+  PauseGame = () => {
+    console.log("Game paused");
+    this.isGamePaused = true;
+
+    // Also disable player input when paused
+    const player = this.entityManager?.entities.find(
+      (e) => e.name === "Player"
+    );
+    const controls = player?.GetComponent("PlayerControls");
+    if (controls) {
+      controls.enabled = false;
+    }
+
+    // Lock/hide cursor
+    document.exitPointerLock();
+  };
+
+  // Resume the game
+  ResumeGame = () => {
+    console.log("Game resumed");
+    this.isGamePaused = false;
+
+    // Re-enable player input
+    const player = this.entityManager?.entities.find(
+      (e) => e.name === "Player"
+    );
+    const controls = player?.GetComponent("PlayerControls");
+    if (controls) {
+      controls.enabled = true;
+    }
+  };
+
   // resize
   WindowResizeHanlder = () => {
     const { innerHeight, innerWidth } = window;
     this.renderer.setSize(innerWidth, innerHeight);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
-  };
-  // render loop with FPS limiting for better consistency
+  }; // render loop with FPS limiting for better consistency
   OnAnimationFrameHandler = (t) => {
     if (this.lastFrameTime === null) {
       this.lastFrameTime = t;
@@ -534,14 +564,17 @@ class FPSGameApp {
       return;
     }
 
-    const delta = t - this.lastFrameTime; // Target 60 FPS (16.67ms per frame) for better responsiveness
-    const targetFrameTime = 1000 / 60; // ms per frame
+    // Skip game updates if paused (but keep animation frame running)
+    if (!this.isGamePaused) {
+      const delta = t - this.lastFrameTime; // Target 60 FPS (16.67ms per frame) for better responsiveness
+      const targetFrameTime = 1000 / 60; // ms per frame
 
-    if (delta >= targetFrameTime) {
-      // Process frame with consistent timestep
-      let timeElapsed = Math.min(1.0 / 30.0, delta * 0.001);
-      this.Step(timeElapsed);
-      this.lastFrameTime = t;
+      if (delta >= targetFrameTime) {
+        // Process frame with consistent timestep
+        let timeElapsed = Math.min(1.0 / 30.0, delta * 0.001);
+        this.Step(timeElapsed);
+        this.lastFrameTime = t;
+      }
     }
 
     this.animFrameId = window.requestAnimationFrame(
@@ -559,11 +592,11 @@ class FPSGameApp {
     // DEBUG: Count cookies in scene - THÊM VÀO ĐÂY
     let cookieCount = 0;
     this.scene.traverse((object) => {
-      if (object.userData && object.userData.type === 'cookie') {
+      if (object.userData && object.userData.type === "cookie") {
         cookieCount++;
       }
     });
-    
+
     if (cookieCount > 0) {
       console.log("Cookies in scene:", cookieCount);
     }

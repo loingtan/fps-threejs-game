@@ -1,0 +1,49 @@
+# Monster Behavior Improvements
+
+## Changes Made to Fix Monsters Standing Still Until They See Player
+
+1. Modified NavigateToRandomPoint method in CharacterController.js:
+   - Disabled random movement by only calling this.ClearPath() and returning
+   - Monsters will stay in place until they detect the player
+
+2. Updated IdleState in CharacterFSM.js:
+   - Removed transition from idle to patrol state
+   - Enhanced player detection logic to use CanSeeThePlayer() method
+   - Monsters will only chase when they can see the player directly
+
+3. Changed PatrolState in CharacterFSM.js:
+   - Set canMove = false to prevent movement during patrol state
+   - Reduced patrol time and made monsters return to idle quickly
+   - Added better detection logic to chase only when seeing player
+
+## Changes Made to Fix Monsters Going Through Containers
+
+1. Enhanced CheckCollision method in CharacterController.js:
+   - Added multiple raycasts from different angles to detect obstacles better
+   - Implemented sphere casting to detect containers and other obstacles
+   - Added a more thorough boundary check system
+
+2. Improved MoveAlongPath method in CharacterController.js:
+   - Added collision avoidance with other monsters
+   - Reduced movement speed to prevent passing through objects
+   - Implemented obstacle avoidance system using raycasts
+   - Added alternative movement attempts when blocked by obstacles
+
+3. Created AvoidObstacles.js helper class:
+   - Better obstacle detection and avoidance
+   - Improved raycasting in multiple directions
+   - Added functions to steer monsters around obstacles
+
+4. Additional improvements:
+   - Made monsters immediately chase player when hit
+   - Added better error handling to prevent crashes
+   - Added ForceReturnToValidArea method to recover monsters that go out of bounds
+   - Fixed syntax errors and improved overall code quality
+
+## Testing
+The game should be fully functional with these improvements. Monsters will now:
+- Remain stationary until they see the player
+- Properly detect and avoid containers and obstacles
+- Not be able to walk through walls or other barriers
+- Chase the player when hit or when they see the player
+- Smoothly navigate around obstacles when chasing

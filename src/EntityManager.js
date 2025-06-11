@@ -27,8 +27,10 @@ export default class EntityManager {
   RegisterGlobalEventHandler(handler) {
     this.globalEventHandlers.push(handler);
   }
-
   BroadcastGlobalEvent(eventData) {
+    console.log(
+      `Broadcasting global event: ${eventData.type} to ${this.globalEventHandlers.length} handlers`
+    );
     for (const handler of this.globalEventHandlers) {
       handler(eventData);
     }
