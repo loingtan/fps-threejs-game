@@ -25,7 +25,7 @@ export default class Weapon extends Component{
         this.magAmmo = 30;
         this.ammoPerMag = 30;
         this.ammo = 100;
-        this.damage = 2;
+        this.damage = 50;
         this.uimanager = null;
         this.reloading = false;
         this.hitResult = {intersectionPoint: new THREE.Vector3(), intersectionNormal: new THREE.Vector3()};

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import Component from "../../Component";
 import { Ammo, AmmoHelper, CollisionFilterGroups } from "../../AmmoLib";
 import CharacterFSM from "./CharacterFSM";
-import MonsterHealthBar from "./MonsterHealthBar";
+// import MonsterHealthBar from "./MonsterHealthBar";
 
 import DebugShapes from "../../DebugShapes";
 
@@ -28,6 +28,8 @@ export default class CharacterController extends Component {
 
     this.canMove = true;
     this.health = 100;
+    // THÊM: Biến để track health trước đó
+    this.previousHealth = this.health; // Track health trước khi nhận damage
   }
 
   SetAnim(name, clip) {
@@ -83,56 +85,207 @@ export default class CharacterController extends Component {
     this.scene.add(scene);
     this.stateMachine.SetState("idle");
 
-    // Create physics body for collision with environment
-    this.CreatePhysicsBody();
-
-    // Add health bar component with camera reference - ensure it's added properly
-    const player = this.FindEntity("Player");
-    let camera = null;
-    if (player) {
-      const controls = player.GetComponent("PlayerControls");
-      if (controls) {
-        camera = controls.camera;
-      }
-    }
-    console.log(
-      "Adding health bar to monster:",
-      this.parent.name,
-      "Camera:",
-      camera
-    );
-    this.healthBar = this.parent.AddComponent(new MonsterHealthBar(camera));
-
-    // Force initial health bar display and update
-    if (this.healthBar) {
-      console.log("Health bar component added successfully");
-      // Give it a moment to initialize, then force show and update the health bar
-      setTimeout(() => {
-        if (this.healthBar && this.healthBar.container) {
-          this.healthBar.container.visible = true;
-          this.healthBar.UpdateHealth(this.health); // Force initial health update
-          console.log(
-            "Forced health bar visibility and health update for monster:",
-            this.parent.name,
-            "Health:",
-            this.health
-          );
-        }
-      }, 100);
+    // THÊM: Cache entityManager reference vào biến
+    // để không phải tìm lại nhiều lần
+    this.cachedEntityManager = this.FindEntityManager();
+    if (this.cachedEntityManager) {
+      console.log(`Found and cached EntityManager for ${this.parent.name}`);
     } else {
-      console.error(
-        "Failed to add health bar component to monster:",
-        this.parent.name
+      console.warn(
+        `EntityManager not found for ${this.parent.name} during Initialize`
       );
     }
 
-    // Force show health bar initially for testing
+    // Create physics body for collision with environment
+    this.CreatePhysicsBody();
+
+    // THÊM: Store reference to parent ID
+    this.parentId = this.parent.id;
+
+    // // Defensive camera-finding logic
+    // let camera = null;
+    // if (this.player) {
+    //   const controls = this.player.GetComponent("PlayerControls");
+    //   if (controls && controls.camera) {
+    //     camera = controls.camera;
+    //   } else {
+    //     console.warn(
+    //       `Player controls or camera not found for ${this.parent.name}`
+    //     );
+    //   }
+    // } else {
+    //   console.warn(`Player reference missing for monster ${this.parent.name}`);
+    // }
+
+    // console.log(
+    //   "Adding health bar to monster:",
+    //   this.parent.name,
+    //   "Camera object exists:",
+    //   !!camera
+    // );
+
+    // // THÊM: Force delay to ensure player camera is fully initialized
+    // setTimeout(() => {
+    //   // THÊM: Try again to get camera if it was null
+    //   if (!camera && this.player) {
+    //     const controls = this.player.GetComponent("PlayerControls");
+    //     if (controls && controls.camera) {
+    //       camera = controls.camera;
+    //       console.log("Camera found on retry for:", this.parent.name);
+    //     }
+    //   }
+
+    //   // THÊM: Double-check existing health bar
+    //   this.healthBar = this.parent.GetComponent("MonsterHealthBar");
+    //   if (!this.healthBar) {
+    //     try {
+    //       // Make sure camera is still valid
+    //       if (!camera && window._APP && window._APP.entityManager) {
+    //         const playerEntity = window._APP.entityManager.Get("Player");
+    //         if (playerEntity) {
+    //           const controls = playerEntity.GetComponent("PlayerControls");
+    //           if (controls) {
+    //             camera = controls.camera;
+    //             console.log("Got camera from _APP for:", this.parent.name);
+    //           }
+    //         }
+    //       }
+
+    //       console.log(
+    //         `Creating health bar for ${this.parent.name} with camera:`,
+    //         !!camera
+    //       );
+
+    //       // Create health bar component
+    //       const healthBarComponent = new MonsterHealthBar(camera);
+    //       console.log("Health bar component created:", !!healthBarComponent);
+
+    //       // THÊM: Tạo container trước khi thêm vào entity
+    //       if (typeof healthBarComponent.CreateHealthBar === "function") {
+    //         healthBarComponent.controller = this; // Set controller reference
+    //         healthBarComponent.CreateHealthBar();
+    //         console.log(
+    //           "Created container manually:",
+    //           !!healthBarComponent.container
+    //         );
+    //       }
+
+    //       // Now add it to the parent entity
+    //       this.healthBar = this.parent.AddComponent(healthBarComponent);
+    //       console.log("Health bar added successfully:", !!this.healthBar);
+
+    //       // Force initialize it (this will trigger both Initialize and Update)
+    //       if (this.healthBar && !this.healthBar.container) {
+    //         console.log("Container still missing, forcing creation");
+    //         if (typeof this.healthBar.Initialize === "function") {
+    //           this.healthBar.Initialize();
+    //         }
+    //         if (typeof this.healthBar.CreateHealthBar === "function") {
+    //           this.healthBar.CreateHealthBar();
+    //         }
+    //       }
+
+    //       // THÊM: Check if container exists now
+    //       console.log("Final container status:", !!this.healthBar?.container);
+
+    //       // THÊM: Nếu vẫn không có container, tạo một cái đơn giản
+    //       if (this.healthBar && !this.healthBar.container) {
+    //         try {
+    //           console.log("Creating emergency container");
+    //           this.healthBar.container = new THREE.Object3D();
+    //           this.healthBar.container.name = "EmergencyHealthBarContainer";
+
+    //           // Create simple health indicator
+    //           const geometry = new THREE.PlaneGeometry(1, 0.2);
+    //           const material = new THREE.MeshBasicMaterial({
+    //             color: 0xff0000,
+    //             transparent: true,
+    //             opacity: 0.8,
+    //           });
+
+    //           const healthMesh = new THREE.Mesh(geometry, material);
+    //           this.healthBar.container.add(healthMesh);
+
+    //           // Add to scene
+    //           if (this.scene) {
+    //             this.scene.add(this.healthBar.container);
+    //             console.log("Emergency container added to scene");
+    //           }
+    //         } catch (e) {
+    //           console.error("Failed to create emergency container:", e);
+    //         }
+    //       }
+    //     } catch (err) {
+    //       console.error("Error creating health bar:", err);
+    //     }
+    //   }
+
+    //   // Force initial health bar display and update
+    //   if (this.healthBar) {
+    //     console.log(
+    //       "Health bar component added successfully for",
+    //       this.parent.name
+    //     );
+
+    //     setTimeout(() => {
+    //       if (this.healthBar && this.healthBar.UpdateHealth) {
+    //         this.healthBar.container.visible = true;
+    //         this.healthBar.UpdateHealth(this.health);
+    //         console.log(
+    //           "Forced health bar visibility and health update for monster:",
+    //           this.parent.name,
+    //           "Health:",
+    //           this.health
+    //         );
+    //       } else {
+    //         console.warn(
+    //           "Health bar exists but UpdateHealth missing for:",
+    //           this.parent.name
+    //         );
+    //       }
+    //     }, 100);
+    //   } else {
+    //     console.error(
+    //       "Failed to add health bar component to monster:",
+    //       this.parent.name
+    //     );
+    //   }
+    // }, 200); // Add delay to ensure everything is properly initialized
+    // THAY THẾ toàn bộ đoạn code tìm camera và tạo health bar bằng:
+    console.log(`Creating direct health bar for ${this.parent.name}`);
+    const directHealthBar = this.CreateDirectHealthBar();
+    directHealthBar.UpdateHealth(this.health);
+
+    // Nếu muốn ẩn health bar sau khi tạo
     setTimeout(() => {
-      if (this.healthBar && this.healthBar.container) {
-        this.healthBar.container.visible = true;
-        console.log("Health bar should be visible for:", this.parent.name);
+      if (this.directHealthBar && this.directHealthBar.container) {
+        this.directHealthBar.container.visible = false;
       }
     }, 1000);
+  }
+
+  // // FIX: Tìm lại health bar nếu bị mất
+  // GetHealthBar() {
+  //   if (this.healthBar) return this.healthBar;
+
+  //   // Tìm lại từ component
+  //   this.healthBar = this.parent.GetComponent("MonsterHealthBar");
+  //   if (this.healthBar) return this.healthBar;
+
+  //   // Tìm trong static cache
+  //   if (
+  //     typeof MonsterHealthBar !== "undefined" &&
+  //     MonsterHealthBar.GetHealthBar
+  //   ) {
+  //     this.healthBar = MonsterHealthBar.GetHealthBar(this.parentId);
+  //     if (this.healthBar) return this.healthBar;
+  //   }
+
+  //   return null;
+  // }
+  // CẬP NHẬT: Chuyển đổi để trả về directHealthBar thay vì healthBar component
+  GetHealthBar() {
+    return this.directHealthBar;
   }
   UpdateDirection() {
     this.dir.copy(this.forwardVec);
@@ -182,6 +335,186 @@ export default class CharacterController extends Component {
 
     this.physicsWorld.addRigidBody(this.physicsBody);
   }
+  // CreateDirectHealthBar() {
+  //   // Nếu đã có thì trả về
+  //   if (this.directHealthBar) return this.directHealthBar;
+
+  //   // Tạo container
+  //   const container = new THREE.Object3D();
+  //   container.name = `HealthBar_${this.parent.name}`;
+
+  //   // Tạo nền thanh máu (background)
+  //   const bgGeometry = new THREE.PlaneGeometry(1, 0.15);
+  //   const bgMaterial = new THREE.MeshBasicMaterial({
+  //     color: 0x000000,
+  //     transparent: true,
+  //     opacity: 0.6,
+  //     depthTest: false,
+  //   });
+  //   const background = new THREE.Mesh(bgGeometry, bgMaterial);
+  //   container.add(background);
+
+  //   // Tạo thanh máu (foreground)
+  //   const healthGeometry = new THREE.PlaneGeometry(0.96, 0.11);
+  //   const healthMaterial = new THREE.MeshBasicMaterial({
+  //     color: 0xff0000,
+  //     transparent: true,
+  //     opacity: 0.8,
+  //     depthTest: false,
+  //   });
+  //   const healthIndicator = new THREE.Mesh(healthGeometry, healthMaterial);
+  //   healthIndicator.position.z = 0.01; // Đặt phía trước background
+  //   container.add(healthIndicator);
+
+  //   // Thêm vào scene
+  //   this.scene.add(container);
+
+  //   // Đặt vị trí ban đầu
+  //   container.position.copy(this.model.position);
+  //   container.position.y += 2.5; // Trên đầu quái vật
+
+  //   // Lưu tham chiếu
+  //   this.directHealthBar = {
+  //     container,
+  //     background,
+  //     healthIndicator,
+  //     healthMaterial,
+  //     maxWidth: 0.96, // Chiều rộng tối đa của thanh máu
+
+  //     // Phương thức cập nhật máu
+  //     UpdateHealth: (health, maxHealth) => {
+  //       const percent = Math.max(0, health / maxHealth);
+
+  //       // Cập nhật kích thước và vị trí
+  //       const newWidth = this.directHealthBar.maxWidth * percent;
+  //       healthIndicator.scale.x = percent;
+
+  //       // Căn giữa thanh máu
+  //       healthIndicator.position.x =
+  //         (percent - 1) * this.directHealthBar.maxWidth * 0.5;
+
+  //       // Đổi màu dựa theo phần trăm máu
+  //       if (percent > 0.6) {
+  //         healthMaterial.color.setHex(0x00ff00); // Xanh lá (>60%)
+  //       } else if (percent > 0.3) {
+  //         healthMaterial.color.setHex(0xffff00); // Vàng (30-60%)
+  //       } else {
+  //         healthMaterial.color.setHex(0xff0000); // Đỏ (<30%)
+  //       }
+
+  //       // Hiển thị thanh máu
+  //       container.visible = true;
+
+  //       // Tự động ẩn sau một khoảng thời gian
+  //       if (this.hideTimeout) clearTimeout(this.hideTimeout);
+  //       this.hideTimeout = setTimeout(() => {
+  //         if (health > 0) container.visible = false;
+  //       }, 3000);
+  //     },
+  //   };
+
+  //   return this.directHealthBar;
+  // }
+
+  CreateDirectHealthBar() {
+    // Nếu đã có thì trả về
+    if (this.directHealthBar) return this.directHealthBar;
+
+    // Tạo container
+    const container = new THREE.Object3D();
+    container.name = `HealthBar_${this.parent.name}`;
+
+    // Tạo nền thanh máu (background) - màu đỏ
+    const bgGeometry = new THREE.PlaneGeometry(1, 0.15);
+    const bgMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000, // ĐỔI: Background là màu đỏ (hiển thị máu đã mất)
+      transparent: true,
+      opacity: 0.6,
+      depthTest: false,
+    });
+    const background = new THREE.Mesh(bgGeometry, bgMaterial);
+    container.add(background);
+
+    // Tạo thanh máu (foreground) - màu xanh lá
+    const healthGeometry = new THREE.PlaneGeometry(0.96, 0.11);
+    const healthMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00, // ĐỔI: Foreground là màu xanh lá (hiển thị máu còn lại)
+      transparent: true,
+      opacity: 0.9, // ĐỔI: Tăng opacity để dễ nhìn hơn
+      depthTest: false,
+    });
+    const healthIndicator = new THREE.Mesh(healthGeometry, healthMaterial);
+    healthIndicator.position.z = 0.01; // Đặt phía trước background
+    container.add(healthIndicator);
+
+    // Thêm vào scene
+    this.scene.add(container);
+
+    // Đặt vị trí ban đầu
+    container.position.copy(this.model.position);
+    container.position.y += 2.5; // Trên đầu quái vật
+
+    // Lưu tham chiếu
+    this.directHealthBar = {
+      container,
+      background,
+      healthIndicator,
+      healthMaterial,
+      maxWidth: 0.96, // Chiều rộng tối đa của thanh máu
+      initialHealth: this.health, // Lưu lại máu ban đầu
+
+      // Phương thức cập nhật máu
+      UpdateHealth: (currentHealth) => {
+        // Tính phần trăm máu còn lại
+        const maxHealth = this.directHealthBar.initialHealth;
+        const percent = Math.max(0, currentHealth / maxHealth);
+
+        // ĐỔI: Đảm bảo thanh máu có giá trị tối thiểu để luôn nhìn thấy
+        const visiblePercent = Math.max(0.01, percent);
+
+        // ĐỔI: Đơn giản hóa cách hiển thị - scale và không dịch chuyển
+        healthIndicator.scale.x = visiblePercent;
+
+        // ĐỔI: Căn lề trái thay vì căn giữa (giống như health bar thông thường)
+        healthIndicator.position.x = -0.48 * (1 - visiblePercent);
+
+        // ĐỔI: Đổi màu dựa theo phần trăm máu
+        if (percent > 0.6) {
+          healthMaterial.color.setHex(0x00ff00); // Xanh lá (>60%)
+        } else if (percent > 0.3) {
+          healthMaterial.color.setHex(0xffff00); // Vàng (30-60%)
+        } else {
+          healthMaterial.color.setHex(0xff6600); // Cam đỏ (<30%)
+        }
+
+        // Hiển thị thanh máu
+        container.visible = true;
+
+        // // Tự động ẩn sau một khoảng thời gian
+        // if (this.hideTimeout) clearTimeout(this.hideTimeout);
+        // if (currentHealth > 0) {
+        //   this.hideTimeout = setTimeout(() => {
+        //     if (this.directHealthBar && this.directHealthBar.container) {
+        //       this.directHealthBar.container.visible = false;
+        //     }
+        //   }, 3000);
+        // }
+
+        // DEBUG: In thông tin để kiểm tra
+        console.log(
+          `Health bar updated: ${currentHealth}/${maxHealth} (${Math.round(
+            percent * 100
+          )}%)`
+        );
+      },
+    };
+
+    // Cập nhật máu ban đầu
+    this.directHealthBar.UpdateHealth(this.health);
+
+    return this.directHealthBar;
+  }
+
   CheckCollision(newPosition) {
     if (!this.physicsBody) return true;
 
@@ -333,12 +666,17 @@ export default class CharacterController extends Component {
     const myPos = this.model.position.clone();
     let nearbyMonster = false;
 
-    // Find all monsters in the scene
-    if (!this.parent.entityManager) {
-      console.warn("EntityManager not found");
+    // FIX: Use FindEntityManager instead of direct access
+    const entityManager = this.FindEntityManager();
+    if (!entityManager) {
+      console.warn("EntityManager not found via FindEntityManager");
+      // Fallback: Just return a direct path to player without avoidance
+      this.path = [this.tempVec.clone()];
       return;
     }
-    const entities = Object.values(this.parent.entityManager.entities);
+
+    // Find all monsters in the scene
+    const entities = Object.values(entityManager.entities);
     for (const entity of entities) {
       // Skip if it's this monster or not a monster
       if (entity === this.parent || !entity.name.includes("Mutant")) {
@@ -433,61 +771,149 @@ export default class CharacterController extends Component {
   HitPlayer() {
     this.player.Broadcast({ topic: "hit" });
   }
+
+  // TakeHit = (msg) => {
+  //   // Default damage amount if not specified
+  //   const amount = msg.amount || 10;
+
+  //   // Lưu health trước khi nhận damage
+  //   this.previousHealth = this.health;
+
+  //   // Apply damage
+  //   this.health = Math.max(0, this.health - amount);
+
+  //   console.log(
+  //     `Monster ${this.parent.name} took ${amount} damage, health: ${this.previousHealth} -> ${this.health}`
+  //   );
+
+  //   // Tạo và cập nhật thanh máu
+  //   const healthBar = this.CreateDirectHealthBar();
+  //   if (healthBar) {
+  //     healthBar.UpdateHealth(this.health);
+  //   }
+
+  //   // KIỂM TRA: Chỉ tính điểm khi health chuyển từ >0 xuống ≤0
+  //   if (this.previousHealth > 0 && this.health <= 0) {
+  //     console.log(
+  //       `Monster ${this.parent.name} just died! (${this.previousHealth} -> ${this.health})`
+  //     );
+  //     console.log("Calculating kill score...");
+
+  //     this.CalculateKillScore();
+
+  //     // TÍNH ĐIỂM CHỈ KHI VỪA CHẾT
+  //     this.CalculateKillScore();
+
+  //     // MANUAL BACKUP: Direct call to UIManager
+  //     const uiEntity = this.FindEntity("UIManager");
+  //     if (uiEntity) {
+  //       const uiManager = uiEntity.GetComponent("UIManager");
+  //       if (uiManager && uiManager.OnMonsterKilled) {
+  //         const playerEntity = this.FindEntity("Player");
+  //         const playerHealth = playerEntity
+  //           ? playerEntity.GetComponent("PlayerHealth")
+  //           : null;
+
+  //         if (playerHealth) {
+  //           const scoreData = {
+  //             scoreEarned: Math.floor(100 * playerHealth.GetHealthPercent()),
+  //             playerHealthPercent: playerHealth.GetHealthPercent(),
+  //             monsterName: this.parent.name,
+  //           };
+
+  //           uiManager.OnMonsterKilled(scoreData);
+  //           console.log("Manual score update completed:", scoreData);
+  //         }
+  //       }
+  //     }
+
+  //     this.stateMachine.SetState("dead");
+
+  //     // Make the health bar disappear instantly when dead
+  //     if (this.directHealthBar && this.directHealthBar.container) {
+  //       this.directHealthBar.container.visible = false;
+  //     }
+
+  //     // Remove the monster after a delay
+  //     setTimeout(() => {
+  //       if (this.parent && this.parent.entityManager) {
+  //         this.parent.entityManager.Remove(this.parent);
+  //       }
+  //     }, 2000);
+  //   } else if (this.health > 0) {
+  //     // CHỈ CHUYỂN STATE KHI CHƯA CHẾT VÀ VẪN SỐNG
+  //     const stateName = this.stateMachine.currentState.Name;
+  //     if (stateName == "idle" || stateName == "patrol") {
+  //       this.stateMachine.SetState("chase");
+  //     }
+  //   } else {
+  //     // Monster đã chết từ trước, không làm gì cả
+  //     console.log(
+  //       `Monster ${this.parent.name} was already dead (${this.previousHealth} -> ${this.health})`
+  //     );
+  //   }
+  // };
+
   TakeHit = (msg) => {
     // Default damage amount if not specified
     const amount = msg.amount || 10;
+
+    // Lưu health trước khi nhận damage
+    this.previousHealth = this.health;
+
+    // Apply damage
     this.health = Math.max(0, this.health - amount);
 
     console.log(
-      `Monster ${this.parent.name} took ${amount} damage, health now: ${this.health}`
+      `Monster ${this.parent.name} took ${amount} damage, health: ${this.previousHealth} -> ${this.health}`
     );
 
-    // Update the 3D health bar - ensure it exists and is correctly showing up
-    if (this.healthBar) {
-      console.log("Updating existing health bar");
-      this.healthBar.UpdateHealth(this.health);
-    } else {
-      console.warn(
-        "Health bar component not found for monster:",
-        this.parent.name
+    // Sử dụng chỉ duy nhất directHealthBar
+    const healthBar = this.CreateDirectHealthBar();
+    if (healthBar) {
+      healthBar.UpdateHealth(this.health);
+    }
+
+    // KIỂM TRA: Chỉ tính điểm khi health chuyển từ >0 xuống ≤0
+    if (this.previousHealth > 0 && this.health <= 0) {
+      console.log(
+        `Monster ${this.parent.name} just died! (${this.previousHealth} -> ${this.health})`
       );
-      // Try to re-add the health bar if it's missing
-      const player = this.FindEntity("Player");
-      let camera = null;
-      if (player) {
-        const controls = player.GetComponent("PlayerControls");
-        if (controls) {
-          camera = controls.camera;
+      console.log("Calculating kill score...");
+
+      this.CalculateKillScore();
+
+      // TÍNH ĐIỂM CHỈ KHI VỪA CHẾT
+      this.CalculateKillScore();
+
+      // MANUAL BACKUP: Direct call to UIManager
+      const uiEntity = this.FindEntity("UIManager");
+      if (uiEntity) {
+        const uiManager = uiEntity.GetComponent("UIManager");
+        if (uiManager && uiManager.OnMonsterKilled) {
+          const playerEntity = this.FindEntity("Player");
+          const playerHealth = playerEntity
+            ? playerEntity.GetComponent("PlayerHealth")
+            : null;
+
+          if (playerHealth) {
+            const scoreData = {
+              scoreEarned: Math.floor(100 * playerHealth.GetHealthPercent()),
+              playerHealthPercent: playerHealth.GetHealthPercent(),
+              monsterName: this.parent.name,
+            };
+
+            uiManager.OnMonsterKilled(scoreData);
+            console.log("Manual score update completed:", scoreData);
+          }
         }
       }
 
-      this.healthBar = this.parent.AddComponent(new MonsterHealthBar(camera));
-      if (this.healthBar) {
-        console.log("Re-added health bar component, updating health");
-        setTimeout(() => {
-          if (this.healthBar) {
-            this.healthBar.UpdateHealth(this.health);
-          }
-        }, 50);
-      }
-    }
-
-    if (this.health == 0) {
       this.stateMachine.SetState("dead");
-      // Make the health bar disappear instantly when dead
-      if (this.healthBar && this.healthBar.container) {
-        this.healthBar.container.visible = false;
-      }
 
-      // Emit monster death event for scoring
-      if (
-        this.parent.entityManager &&
-        this.parent.entityManager.BroadcastGlobalEvent
-      ) {
-        this.parent.entityManager.BroadcastGlobalEvent({
-          type: "monster_death",
-          monster: this.parent,
-        });
+      // Make the health bar disappear instantly when dead
+      if (this.directHealthBar && this.directHealthBar.container) {
+        this.directHealthBar.container.visible = false;
       }
 
       // Remove the monster after a delay
@@ -496,13 +922,76 @@ export default class CharacterController extends Component {
           this.parent.entityManager.Remove(this.parent);
         }
       }, 2000);
-    } else {
+    } else if (this.health > 0) {
+      // CHỈ CHUYỂN STATE KHI CHƯA CHẾT VÀ VẪN SỐNG
       const stateName = this.stateMachine.currentState.Name;
       if (stateName == "idle" || stateName == "patrol") {
         this.stateMachine.SetState("chase");
       }
+    } else {
+      // Monster đã chết từ trước, không làm gì cả
+      console.log(
+        `Monster ${this.parent.name} was already dead (${this.previousHealth} -> ${this.health})`
+      );
     }
   };
+
+  GetHealthBar() {
+    return this.directHealthBar;
+  }
+
+  CalculateKillScore() {
+    console.log("=== CALCULATING KILL SCORE FOR FRESH KILL ===");
+
+    const player = this.FindEntity("Player");
+    if (!player) {
+      console.warn("Player not found for score calculation");
+      return;
+    }
+
+    const playerHealth = player.GetComponent("PlayerHealth");
+    if (!playerHealth) {
+      console.warn("PlayerHealth component not found for score calculation");
+      return;
+    }
+
+    const playerHealthPercent = playerHealth.GetHealthPercent();
+    const scoreEarned = Math.floor(100 * playerHealthPercent);
+
+    console.log(
+      `Player health: ${playerHealth.health}/${playerHealth.maxHealth} (${(
+        playerHealthPercent * 100
+      ).toFixed(1)}%)`
+    );
+    console.log(
+      `FRESH KILL SCORE for ${this.parent.name}: ${scoreEarned} points`
+    );
+
+    const eventData = {
+      type: "monster_killed",
+      scoreEarned: scoreEarned,
+      playerHealthPercent: playerHealthPercent,
+      monsterName: this.parent.name,
+    };
+
+    // Broadcast event
+    const entityManager = this.FindEntityManager();
+    if (entityManager) {
+      entityManager.BroadcastGlobalEvent(eventData);
+      console.log("Fresh kill score event broadcasted");
+    } else {
+      // Direct call to UIManager
+      const uiEntity = this.FindEntity("UIManager");
+      if (uiEntity) {
+        const uiManager = uiEntity.GetComponent("UIManager");
+        if (uiManager && uiManager.OnMonsterKilled) {
+          uiManager.OnMonsterKilled(eventData);
+          console.log("Fresh kill score sent directly to UIManager");
+        }
+      }
+    }
+  }
+
   MoveAlongPath(t) {
     if (!this.path?.length) return;
 
@@ -510,9 +999,10 @@ export default class CharacterController extends Component {
     let avoidanceFactor = new THREE.Vector3(0, 0, 0);
     const myPos = this.model.position.clone();
 
-    // Find all monsters in the scene for avoidance
-    if (this.parent.entityManager) {
-      const entities = Object.values(this.parent.entityManager.entities);
+    // FIX: Use FindEntityManager instead of direct access
+    const entityManager = this.FindEntityManager();
+    if (entityManager) {
+      const entities = Object.values(entityManager.entities);
       for (const entity of entities) {
         // Skip if it's this monster or not a monster
         if (entity === this.parent || !entity.name.includes("Mutant")) {
@@ -545,7 +1035,7 @@ export default class CharacterController extends Component {
       this.model.quaternion.slerp(this.tempRot, 4.0 * t); // Add direct movement to actually move the model towards target
       if (this.canMove) {
         const speed =
-          this.stateMachine.currentState.Name === "chase" ? 0.15 : 0.08; // Increased chase speed
+          this.stateMachine.currentState.Name === "chase" ? 0.05 : 0.08; // Increased chase speed
 
         // Apply avoidance to prevent overlapping
         let movement = target.clone();
@@ -631,6 +1121,21 @@ export default class CharacterController extends Component {
 
     this.parent.SetRotation(this.model.quaternion);
     this.parent.SetPosition(this.model.position);
+    // Cập nhật vị trí thanh máu nếu có
+    if (this.directHealthBar && this.directHealthBar.container) {
+      // Đặt vị trí trên đầu quái vật
+      this.directHealthBar.container.position.copy(this.model.position);
+      this.directHealthBar.container.position.y += 2.5;
+
+      // Luôn quay về phía camera
+      const player = this.FindEntity("Player");
+      if (player) {
+        const controls = player.GetComponent("PlayerControls");
+        if (controls && controls.camera) {
+          this.directHealthBar.container.lookAt(controls.camera.position);
+        }
+      }
+    }
 
     // Update physics body position if it exists
     if (this.physicsBody) {
@@ -644,6 +1149,62 @@ export default class CharacterController extends Component {
           this.model.position.z
         );
       this.physicsBody.setWorldTransform(transform);
+    }
+    // Cập nhật vị trí thanh máu nếu có
+    if (this.directHealthBar && this.directHealthBar.container) {
+      // Đặt vị trí trên đầu quái vật
+      this.directHealthBar.container.position.copy(this.model.position);
+      this.directHealthBar.container.position.y += 2.5;
+
+      // Luôn quay về phía camera
+      const player = this.FindEntity("Player");
+      if (player) {
+        const controls = player.GetComponent("PlayerControls");
+        if (controls && controls.camera) {
+          this.directHealthBar.container.lookAt(controls.camera.position);
+        }
+      }
+    }
+  }
+  // THÊM: Method để tìm EntityManager
+  FindEntityManager() {
+    // First check the cached reference
+    if (this.cachedEntityManager) {
+      return this.cachedEntityManager;
+    }
+
+    // Thử tìm qua parent chain
+    let current = this.parent;
+    while (current) {
+      if (current.entityManager) {
+        // Cache the result
+        this.cachedEntityManager = current.entityManager;
+        return current.entityManager;
+      }
+      current = current.parent;
+    }
+
+    // Thử tìm qua global app
+    if (window._APP && window._APP.entityManager) {
+      // Cache the result
+      this.cachedEntityManager = window._APP.entityManager;
+      return window._APP.entityManager;
+    }
+
+    return null;
+  }
+  // Thêm cleanup khi quái vật bị xóa
+  OnDestroy() {
+    // Xóa thanh máu khỏi scene
+    if (this.directHealthBar && this.directHealthBar.container) {
+      this.scene.remove(this.directHealthBar.container);
+      this.directHealthBar = null;
+    }
+
+    // Xóa timeout
+    if (this.hideTimeout) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
     }
   }
 }
