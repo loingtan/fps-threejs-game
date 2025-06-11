@@ -32,6 +32,8 @@ import walkAnim from "./assets/animations/mutant walking.fbx";
 import runAnim from "./assets/animations/mutant run.fbx";
 import dieAnim from "./assets/animations/mutant dying.fbx";
 
+import cookie from "./assets/animations/cookie.fbx";
+
 //AK47 Model and textures
 import ak47 from "./assets/guns/ak47/ak47.glb";
 import muzzleFlash from "./assets/muzzle_flash.glb";
@@ -66,6 +68,9 @@ import LevelBulletDecals from "./entities/Level/BulletDecals";
 import MonsterSpawner from "./entities/Level/MonsterSpawner";
 import PlayerHealth from "./entities/Player/PlayerHealth";
 
+//Cookie
+import CookieSpawner from "./entities/Cookie/CookieSpawner";
+
 class FPSGameApp {
   constructor() {
     this.lastFrameTime = null;
@@ -75,6 +80,41 @@ class FPSGameApp {
     AmmoHelper.Init(() => {
       this.Init();
     });
+    // Add global teleport function
+    window.teleportToNearestCookie = () => {
+      const cookies = [];
+      this.scene.traverse((object) => {
+        if (object.userData && object.userData.type === 'cookie') {
+          cookies.push(object);
+        }
+      });
+      
+    if (cookies.length > 0) {
+      const nearestCookie = cookies[0];
+      const player = this.entityManager.Get("Player");
+      if (player) {
+        const newPos = nearestCookie.position.clone();
+        newPos.y += 2; // Spawn above cookie
+        player.SetPosition(newPos);
+        console.log("Teleported to cookie at:", newPos);
+      }
+    } else {
+      console.log("No cookies found!");
+    }
+  };
+  
+    // Add list all cookies function  
+    window.listCookies = () => {
+      const cookies = [];
+      this.scene.traverse((object) => {
+        if (object.userData && object.userData.type === 'cookie') {
+          cookies.push(object.position.clone());
+        }
+      });
+      console.log("Cookie positions:", cookies);
+      return cookies;
+    };
+
   }
 
   Init() {
@@ -221,6 +261,8 @@ class FPSGameApp {
     promises.push(this.AddAsset(runAnim, fbxLoader, "runAnim"));
     promises.push(this.AddAsset(attackAnim, fbxLoader, "attackAnim"));
     promises.push(this.AddAsset(dieAnim, fbxLoader, "dieAnim"));
+    // THÊM COOKIE VÀO PROMISES TRƯỚC KHI LOAD
+    promises.push(this.AddAsset(cookie, fbxLoader, "cookie"));
 
     //AK47
     promises.push(this.AddAsset(ak47, gltfLoader, "ak47"));
@@ -244,6 +286,8 @@ class FPSGameApp {
 
     this.assets["level"] = this.assets["level"].scene;
     this.assets["muzzleFlash"] = this.assets["muzzleFlash"].scene;
+
+
 
     //Extract mutant anims
     this.mutantAnims = {};
@@ -385,14 +429,14 @@ class FPSGameApp {
     // Add MonsterSpawner for infinite spawning
     const spawnerEntity = new Entity();
     spawnerEntity.SetName("MonsterSpawner");
-    const navmeshComponent = levelEntity.GetComponent("Navmesh");
+    const levelmutannavmeshComponent = levelEntity.GetComponent("Navmesh");
     spawnerEntity.AddComponent(
       new MonsterSpawner(
         this.assets["mutant"],
         this.mutantAnims,
         this.scene,
         this.physicsWorld,
-        navmeshComponent
+        levelmutannavmeshComponent
       )
     );
     this.entityManager.Add(spawnerEntity);
@@ -416,7 +460,41 @@ class FPSGameApp {
       box.SetPosition(new THREE.Vector3(loc[0], loc[1], loc[2]));
       this.entityManager.Add(box);
     });
+    // DEBUG: Kiểm tra cookie asset
+    console.log("Original cookie asset:", this.assets["cookie"]);
+    
+    // CREATE SIMPLE COOKIE GEOMETRY thay vì dùng asset
+    const cookieGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
+    const cookieMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0xFFD700, // Gold color
+      emissive: 0x222200 // Slight glow
+    });
+    const cookieMesh = new THREE.Mesh(cookieGeometry, cookieMaterial);
+    
+    // Override cookie asset với geometry tự tạo
+    this.assets["cookie"] = cookieMesh;
+    console.log("Created custom cookie mesh:", this.assets["cookie"]);
 
+    // CREATE MULTIPLE COOKIE SPAWNERS
+    const numberOfSpawners = 3; // Tăng số này để có nhiều cookie cùng lúc
+    
+    for (let i = 0; i < numberOfSpawners; i++) {
+      const cookieSpawnerEntity = new Entity();
+      cookieSpawnerEntity.SetName(`CookieSpawner_${i}`);
+      const levelcookienavmeshComponent = levelEntity.GetComponent("Navmesh");
+      
+      if (this.assets["cookie"]) {
+        cookieSpawnerEntity.AddComponent(
+          new CookieSpawner(
+            this.assets["cookie"],
+            this.scene,
+            this.physicsWorld,
+            levelcookienavmeshComponent
+          )
+        );
+        this.entityManager.Add(cookieSpawnerEntity);
+      }
+    }
     this.entityManager.EndSetup();
 
     this.scene.add(this.camera);
@@ -477,6 +555,18 @@ class FPSGameApp {
   Step(elapsedTime) {
     this.physicsWorld.stepSimulation(elapsedTime, 3); // Reduce sub-steps from 10 to 3
     //this.debugDrawer.update();
+
+    // DEBUG: Count cookies in scene - THÊM VÀO ĐÂY
+    let cookieCount = 0;
+    this.scene.traverse((object) => {
+      if (object.userData && object.userData.type === 'cookie') {
+        cookieCount++;
+      }
+    });
+    
+    if (cookieCount > 0) {
+      console.log("Cookies in scene:", cookieCount);
+    }
 
     this.entityManager.Update(elapsedTime);
     // Force UIManager update for score sync

@@ -28,6 +28,8 @@ export default class CharacterController extends Component {
 
     this.canMove = true;
     this.health = 100;
+    // this.maxHealth = 100;
+
   }
 
   SetAnim(name, clip) {
@@ -352,94 +354,65 @@ export default class CharacterController extends Component {
     }
   }
   NavigateToPlayer() {
-    if (!this.player) {
-      console.error("Player not found in NavigateToPlayer");
+    const player = this.FindEntity("Player");
+    if (!player) {
+      console.warn("Player not found");
       return;
     }
 
-    this.tempVec.copy(this.player.Position);
-    this.tempVec.y = 0.5;
-
-    // Log distance to player to debug
-    const distanceToPlayer = this.model.position.distanceTo(this.tempVec);
-    // console.log(`Monster ${this.parent.name} distance to player: ${distanceToPlayer}`);
-
-    // Check for nearby monsters to avoid overlapping
-    const myPos = this.model.position.clone();
-    let nearbyMonster = false;
-
-    // Find all monsters in the scene
-    if (!this.parent.entityManager) {
-      console.warn("EntityManager not found");
+    // FIX: Thay vì tìm EntityManager, dùng pathfinding trực tiếp
+    if (!this.navmesh_) {
+      console.warn("Navmesh not found for navigation");
       return;
     }
-    const entities = Object.values(this.parent.entityManager.entities);
-    for (const entity of entities) {
-      // Skip if it's this monster or not a monster
-      if (entity === this.parent || !entity.name.includes("Mutant")) {
-        continue;
-      }
 
-      const monsterController = entity.GetComponent("CharacterController");
-      if (!monsterController) continue;
+    const playerPosition = player.Position;
+    const currentPosition = this.parent.Position;
 
-      const otherPos = monsterController.model.position.clone();
-      const distanceToOtherMonster = myPos.distanceTo(otherPos);
+    // Calculate simple direct path nếu không có EntityManager
+    const direction = new THREE.Vector3()
+      .subVectors(playerPosition, currentPosition)
+      .normalize();
 
-      // If another monster is too close
-      if (distanceToOtherMonster < 3.0) {
-        nearbyMonster = true;
-        break;
-      }
-    }
+    // Move towards player với simple pathfinding
+    const moveDistance = 5.0; // Adjust as needed
+    const targetPosition = currentPosition.clone().add(
+      direction.multiplyScalar(moveDistance)
+    );
 
-    // Direct path for close distances or if navmesh returns null
-    if (distanceToPlayer < 10 && !nearbyMonster) {
-      // Direct path when no other monsters are nearby
-      this.path = [this.tempVec.clone()];
-    } else if (nearbyMonster || distanceToPlayer < 5) {
-      // If other monsters nearby, calculate an offset position around the player
-      const angle = (this.parent.id * 72) % 360; // Different angle for each monster
-      const offset = new THREE.Vector3(
-        Math.cos((angle * Math.PI) / 180) * 3,
-        0,
-        Math.sin((angle * Math.PI) / 180) * 3
-      );
-
-      const offsetTarget = this.tempVec.clone().add(offset);
-      this.path = [offsetTarget];
+    // Validate position trước khi move
+    if (this.IsPositionValid(targetPosition)) {
+      this.path = [currentPosition.clone(), targetPosition];
+      console.log(`Monster ${this.parent.name} navigating towards player`);
     } else {
-      // For longer distances, try navmesh pathfinding
-      if (!this.navmesh) {
-        console.error("Navmesh not found for monster:", this.parent.name);
-        this.path = [this.tempVec.clone()]; // Fallback to direct path
-        return;
-      }
-
-      const navPath = this.navmesh.FindPath(this.model.position, this.tempVec);
-
-      // If navmesh fails or returns empty path, use direct path
-      if (!navPath || navPath.length === 0) {
-        this.path = [this.tempVec.clone()];
-      } else {
-        this.path = navPath;
-      }
+      // Nếu không thể move thẳng, thử random direction
+      this.NavigateToRandomPoint();
     }
 
-    // Force path update - ensure we always have at least one target point
-    if (!this.path || this.path.length === 0) {
-      this.path = [this.tempVec.clone()];
-    }
+    // REMOVE: Bỏ phần tìm EntityManager gây lỗi
+    // if (!this.parent || !this.parent.entityManager) {
+    //   console.warn("EntityManager not found");
+    //   return;
+    // }
+  }
 
-    // Debug path visualization
-    /*
-        if(this.path){
-            this.pathDebug.Clear();
-            for(const point of this.path){
-                this.pathDebug.AddPoint(point, "blue");
-            }
-        }
-        */
+  // THÊM: Backup method nếu cần EntityManager
+  FindEntityManager() {
+    // Thử tìm qua parent chain
+    let current = this.parent;
+    while (current) {
+      if (current.entityManager) {
+        return current.entityManager;
+      }
+      current = current.parent;
+    }
+    
+    // Thử tìm qua global app
+    if (window._APP && window._APP.entityManager) {
+      return window._APP.entityManager;
+    }
+    
+    return null;
   }
 
   FacePlayer(t, rate = 3.0) {
@@ -555,6 +528,56 @@ export default class CharacterController extends Component {
       }
     }
   };
+
+  // THÊM: Method tính điểm khi giết quái
+  CalculateKillScore() {
+  console.log("=== CALCULATING KILL SCORE ===");
+  
+  const player = this.FindEntity("Player");
+  if (!player) {
+    console.warn("Player not found for score calculation");
+    return;
+  }
+
+  const playerHealth = player.GetComponent("PlayerHealth");
+  if (!playerHealth) {
+    console.warn("PlayerHealth component not found for score calculation");
+    return;
+  }
+
+  const playerHealthPercent = playerHealth.GetHealthPercent();
+  const scoreEarned = Math.floor(100 * playerHealthPercent);
+  
+  console.log(`Player health: ${playerHealth.health}/${playerHealth.maxHealth} (${(playerHealthPercent * 100).toFixed(1)}%)`);
+  console.log(`Score earned for killing ${this.parent.name}: ${scoreEarned} points`);
+  
+  // SỬA: Broadcast qua entity manager
+  const eventData = {
+    type: 'monster_killed',
+    scoreEarned: scoreEarned,
+    playerHealthPercent: playerHealthPercent,
+    monsterName: this.parent.name
+  };
+  
+  console.log("Broadcasting event:", eventData);
+  
+  // Thử cả 2 cách
+  if (this.parent && this.parent.entityManager) {
+    this.parent.entityManager.BroadcastGlobalEvent(eventData);
+    console.log("Event broadcasted via entityManager");
+  }
+  
+  // Backup: Direct call to UIManager
+  const uiEntity = this.FindEntity("UIManager");
+  if (uiEntity) {
+    const uiManager = uiEntity.GetComponent("UIManager");
+    if (uiManager && uiManager.OnMonsterKilled) {
+      uiManager.OnMonsterKilled(eventData);
+      console.log("Event sent directly to UIManager");
+    }
+  }
+}
+
   MoveAlongPath(t) {
     // Check if path exists and has elements, also verify model exists
     if (!this.path?.length || !this.model || !this.model.position) return;

@@ -3,7 +3,9 @@ import Component from "../../Component";
 export default class PlayerHealth extends Component {
   constructor() {
     super();
+    this.name = "PlayerHealth"; // THÊM: Set component name
     this.health = 100;
+    this.maxHealth = 100; // THÊM: Add maxHealth property
     this.isDead = false;
     this.gameOverDelay = 3000; // 3 seconds before returning to menu
   }
@@ -20,6 +22,27 @@ export default class PlayerHealth extends Component {
       this.handlePlayerDeath();
     }
   };
+
+  // THÊM: Method để lấy health percent cho score calculation
+  GetHealthPercent() {
+    return this.health / this.maxHealth;
+  }
+
+  // THÊM: Method để heal player (nếu cần)
+  Heal(amount) {
+    if (this.isDead) return;
+    
+    this.health += amount;
+    this.health = Math.min(this.maxHealth, this.health); // Không vượt quá max
+    
+    console.log(`Player healed ${amount}, health now: ${this.health}/${this.maxHealth}`);
+    
+    // Update UI
+    if (this.uimanager) {
+      this.uimanager.SetHealth(this.health);
+    }
+  }
+
   handlePlayerDeath() {
     // Disable player movement
     const controls = this.parent.GetComponent("PlayerControls");

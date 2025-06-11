@@ -4,7 +4,8 @@ export default class UIManager extends Component {
   constructor() {
     super();
     this.name = "UIManager";
-    this.score = 0;
+    this.score = 0; // THÊM: Track total score
+    this.kills = 0; // THÊM: Track kill count
   }
 
   SetAmmo(mag, rest) {
@@ -89,5 +90,33 @@ export default class UIManager extends Component {
     if (scoreElem && scoreElem.innerText != this.score) {
       scoreElem.innerText = this.score;
     }
+    // THÊM: Update score display
+    if (this.scoreDisplay) {
+      this.scoreDisplay.innerHTML = `
+        Score: ${this.score}<br>
+        Kills: ${this.kills}
+      `;
+    } else {
+      // Tạo score display nếu chưa có
+      this.scoreDisplay = document.createElement("div");
+      this.scoreDisplay.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+        background: rgba(0,0,0,0.7);
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 1000;
+      `;
+      this.scoreDisplay.innerHTML = `
+        Score: ${this.score}<br>
+        Kills: ${this.kills}
+      `;
+      document.body.appendChild(this.scoreDisplay);
+    }
+
   }
 }
