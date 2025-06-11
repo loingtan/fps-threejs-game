@@ -40,9 +40,7 @@ export default class MonsterSpawner extends Component {
       this.parent.entityManager.RegisterGlobalEventHandler((eventData) => {
         if (eventData.type === "monster_death") {
           this.monstersAlive--;
-          if (this.uiManager) {
-            this.uiManager.AddScore(1);
-          }
+          // Score is handled by UIManager
         }
       });
     }

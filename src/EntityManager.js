@@ -34,9 +34,20 @@ export default class EntityManager {
     }
   }
   EndSetup() {
+    // First initialize the Player entity if it exists
+    const player = this.Get("Player");
+    if (player) {
+      for (const key in player.components) {
+        player.components[key].Initialize();
+      }
+    }
+
+    // Then initialize the rest of the entities
     for (const ent of Object.values(this.entities)) {
-      for (const key in ent.components) {
-        ent.components[key].Initialize();
+      if (ent.Name !== "Player") {
+        for (const key in ent.components) {
+          ent.components[key].Initialize();
+        }
       }
     }
   }

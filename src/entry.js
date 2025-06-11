@@ -334,10 +334,9 @@ class FPSGameApp {
     skyEntity.SetName("Sky");
     skyEntity.AddComponent(new Sky(this.scene, this.assets["skyTex"]));
     this.entityManager.Add(skyEntity);
-
     const playerEntity = new Entity();
     playerEntity.SetName("Player");
-    playerEntity.AddComponent(new PlayerPhysics(this.physicsWorld, Ammo));
+    playerEntity.AddComponent(new PlayerPhysics(this.physicsWorld));
     playerEntity.AddComponent(new PlayerControls(this.camera, this.scene));
     playerEntity.AddComponent(
       new Weapon(

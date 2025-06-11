@@ -1,83 +1,87 @@
-import { Vector3, Quaternion } from 'three';
+import { Vector3, Quaternion } from "three";
 
-export default class Entity{
-    constructor(){
-        this.name = null;
-        this.components = {};
-        this.position = new Vector3();
-        this.rotation = new Quaternion();
-        this.parent = null;
-        this.eventHandlers = {};
+export default class Entity {
+  constructor() {
+    this.name = null;
+    this.components = {};
+    this.position = new Vector3();
+    this.rotation = new Quaternion();
+    this.parent = null;
+    this.eventHandlers = {};
+  }
+
+  AddComponent(component) {
+    component.SetParent(this);
+    this.components[component.name] = component;
+  }
+  SetParent(parent) {
+    this.parent = parent;
+    // Store reference to entityManager if parent is EntityManager
+    if (parent && parent.BroadcastGlobalEvent) {
+      this.entityManager = parent;
+      console.log(`Entity ${this.name} received entityManager reference`);
+    }
+  }
+
+  SetName(name) {
+    this.name = name;
+  }
+
+  get Name() {
+    return this.name;
+  }
+
+  GetComponent(name) {
+    return this.components[name];
+  }
+
+  SetPosition(position) {
+    this.position.copy(position);
+  }
+
+  get Position() {
+    return this.position;
+  }
+
+  SetRotation(rotation) {
+    this.rotation.copy(rotation);
+  }
+
+  get Rotation() {
+    return this.rotation;
+  }
+
+  FindEntity(name) {
+    return this.parent.Get(name);
+  }
+
+  RegisterEventHandler(handler, topic) {
+    if (!this.eventHandlers.hasOwnProperty(topic)) {
+      this.eventHandlers[topic] = [];
     }
 
-    AddComponent(component){
-        component.SetParent(this);
-        this.components[component.name] = component;
+    this.eventHandlers[topic].push(handler);
+  }
+
+  Broadcast(msg) {
+    if (!this.eventHandlers.hasOwnProperty(msg.topic)) {
+      return;
     }
 
-    SetParent(parent){
-        this.parent = parent;
+    for (const handler of this.eventHandlers[msg.topic]) {
+      handler(msg);
     }
+  }
 
-    SetName(name){
-        this.name = name;
+  PhysicsUpdate(world, timeStep) {
+    for (let k in this.components) {
+      this.components[k].PhysicsUpdate(world, timeStep);
     }
+  }
 
-    get Name(){
-        return this.name;
+  Update(timeElapsed) {
+    for (let k in this.components) {
+      this.components[k].Update(timeElapsed);
     }
-
-    GetComponent(name){
-        return this.components[name];
-    }
-
-    SetPosition(position){
-        this.position.copy(position);
-    }
-
-    get Position(){
-        return this.position;
-    }
-
-    SetRotation(rotation){
-        this.rotation.copy(rotation);
-    }
-
-    get Rotation(){
-        return this.rotation;
-    }
-
-    FindEntity(name) {
-        return this.parent.Get(name);
-    }
-
-    RegisterEventHandler(handler, topic){
-        if(!this.eventHandlers.hasOwnProperty(topic)){
-            this.eventHandlers[topic] = [];
-        }
-
-        this.eventHandlers[topic].push(handler);
-    }
-
-    Broadcast(msg){
-        if(!this.eventHandlers.hasOwnProperty(msg.topic)){
-            return;
-        }
-
-        for(const handler of this.eventHandlers[msg.topic]){
-            handler(msg);
-        }
-    }
-
-    PhysicsUpdate(world, timeStep){
-        for (let k in this.components) {
-            this.components[k].PhysicsUpdate(world, timeStep);
-        }
-    }
-
-    Update(timeElapsed) {
-        for (let k in this.components) {
-          this.components[k].Update(timeElapsed);
-        }
-    }
+  }
 }

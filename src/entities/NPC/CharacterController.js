@@ -41,98 +41,133 @@ export default class CharacterController extends Component {
     });
   }
   Initialize() {
-    this.stateMachine = new CharacterFSM(this);
-    this.navmesh = this.FindEntity("Level").GetComponent("Navmesh");
-    this.hitbox = this.GetComponent("AttackTrigger");
-    this.player = this.FindEntity("Player");
+    try {
+      this.stateMachine = new CharacterFSM(this);
 
-    // Set health based on monster name/type
-    if (this.parent.name.includes("Mutant_")) {
-      // Normal mutants
-      this.health = 100;
-    } else if (this.parent.name.includes("Mutant")) {
-      // Boss mutant with higher health
-      this.health = 150;
-    }
+      const levelEntity = this.FindEntity("Level");
+      if (levelEntity) {
+        this.navmesh = levelEntity.GetComponent("Navmesh");
+      }
 
-    this.parent.RegisterEventHandler(this.TakeHit, "hit");
+      this.hitbox = this.GetComponent("AttackTrigger");
+      this.player = this.FindEntity("Player");
 
-    const scene = this.model;
+      // Set health based on monster name/type
+      if (this.parent && this.parent.name) {
+        if (this.parent.name.includes("Mutant_")) {
+          // Normal mutants
+          this.health = 100;
+        } else if (this.parent.name.includes("Mutant")) {
+          // Boss mutant with higher health
+          this.health = 150;
+        }
+      }
 
-    scene.scale.setScalar(0.01);
-    scene.position.copy(this.parent.position);
+      if (this.parent) {
+        this.parent.RegisterEventHandler(this.TakeHit, "hit");
+      }
 
-    this.mixer = new THREE.AnimationMixer(scene);
-
-    scene.traverse((child) => {
-      if (!child.isSkinnedMesh) {
+      const scene = this.model;
+      if (!scene) {
+        console.error("No model found for CharacterController");
         return;
       }
 
-      child.frustumCulled = false;
-      child.castShadow = true;
-      child.receiveShadow = true;
-      this.skinnedmesh = child;
-      this.rootBone = child.skeleton.bones.find(
-        (bone) => bone.name == "MutantHips"
-      );
-      this.rootBone.refPos = this.rootBone.position.clone();
-      this.lastPos = this.rootBone.position.clone();
-    });
-    this.SetupAnimations();
-    this.scene.add(scene);
-    this.stateMachine.SetState("idle");
-
-    // Create physics body for collision with environment
-    this.CreatePhysicsBody();
-
-    // Add health bar component with camera reference - ensure it's added properly
-    const player = this.FindEntity("Player");
-    let camera = null;
-    if (player) {
-      const controls = player.GetComponent("PlayerControls");
-      if (controls) {
-        camera = controls.camera;
+      scene.scale.setScalar(0.01);
+      if (this.parent && this.parent.position) {
+        scene.position.copy(this.parent.position);
       }
-    }
-    console.log(
-      "Adding health bar to monster:",
-      this.parent.name,
-      "Camera:",
-      camera
-    );
-    this.healthBar = this.parent.AddComponent(new MonsterHealthBar(camera));
 
-    // Force initial health bar display and update
-    if (this.healthBar) {
-      console.log("Health bar component added successfully");
-      // Give it a moment to initialize, then force show and update the health bar
+      this.mixer = new THREE.AnimationMixer(scene);
+
+      let foundRootBone = false;
+      scene.traverse((child) => {
+        if (!child.isSkinnedMesh) {
+          return;
+        }
+
+        child.frustumCulled = false;
+        child.castShadow = true;
+        child.receiveShadow = true;
+        this.skinnedmesh = child;
+
+        if (child.skeleton && child.skeleton.bones) {
+          this.rootBone = child.skeleton.bones.find(
+            (bone) => bone.name == "MutantHips"
+          );
+
+          if (this.rootBone) {
+            foundRootBone = true;
+            this.rootBone.refPos = this.rootBone.position.clone();
+            this.lastPos = this.rootBone.position.clone();
+          } else {
+            console.warn("Could not find MutantHips bone in skeleton");
+          }
+        }
+      });
+      if (!foundRootBone) {
+        console.warn("No root bone found for monster:", this.parent?.name);
+      }
+
+      // These operations must be in the try block to access the scene variable
+      this.SetupAnimations();
+      this.scene.add(scene);
+      this.stateMachine.SetState("idle"); // Create physics body for collision with environment
+      this.CreatePhysicsBody();
+
+      // Add health bar component with camera reference - ensure it's added properly
+      const player = this.FindEntity("Player");
+      let camera = null;
+      if (player) {
+        const controls = player.GetComponent("PlayerControls");
+        if (controls) {
+          camera = controls.camera;
+        }
+      }
+      console.log(
+        "Adding health bar to monster:",
+        this.parent?.name || "unknown",
+        "Camera:",
+        camera
+      );
+      this.healthBar = this.parent.AddComponent(new MonsterHealthBar(camera));
+
+      // Force initial health bar display and update
+      if (this.healthBar) {
+        console.log("Health bar component added successfully");
+        // Give it a moment to initialize, then force show and update the health bar
+        setTimeout(() => {
+          if (this.healthBar && this.healthBar.container) {
+            this.healthBar.container.visible = true;
+            this.healthBar.UpdateHealth(this.health); // Force initial health update
+            console.log(
+              "Forced health bar visibility and health update for monster:",
+              this.parent?.name || "unknown",
+              "Health:",
+              this.health
+            );
+          }
+        }, 100);
+      } else {
+        console.error(
+          "Failed to add health bar component to monster:",
+          this.parent?.name || "unknown"
+        );
+      }
+
+      // Force show health bar initially for testing
       setTimeout(() => {
         if (this.healthBar && this.healthBar.container) {
           this.healthBar.container.visible = true;
-          this.healthBar.UpdateHealth(this.health); // Force initial health update
           console.log(
-            "Forced health bar visibility and health update for monster:",
-            this.parent.name,
-            "Health:",
-            this.health
+            "Health bar should be visible for:",
+            this.parent?.name || "unknown"
           );
         }
-      }, 100);
-    } else {
-      console.error(
-        "Failed to add health bar component to monster:",
-        this.parent.name
-      );
+      }, 1000);
+    } catch (error) {
+      console.error("Error in CharacterController.Initialize:", error);
     }
-
-    // Force show health bar initially for testing
-    setTimeout(() => {
-      if (this.healthBar && this.healthBar.container) {
-        this.healthBar.container.visible = true;
-        console.log("Health bar should be visible for:", this.parent.name);
-      }
-    }, 1000);
   }
   UpdateDirection() {
     this.dir.copy(this.forwardVec);
@@ -442,7 +477,6 @@ export default class CharacterController extends Component {
       `Monster ${this.parent.name} took ${amount} damage, health now: ${this.health}`
     );
 
-    // Update the 3D health bar - ensure it exists and is correctly showing up
     if (this.healthBar) {
       console.log("Updating existing health bar");
       this.healthBar.UpdateHealth(this.health);
@@ -451,7 +485,6 @@ export default class CharacterController extends Component {
         "Health bar component not found for monster:",
         this.parent.name
       );
-      // Try to re-add the health bar if it's missing
       const player = this.FindEntity("Player");
       let camera = null;
       if (player) {
@@ -477,21 +510,40 @@ export default class CharacterController extends Component {
       // Make the health bar disappear instantly when dead
       if (this.healthBar && this.healthBar.container) {
         this.healthBar.container.visible = false;
-      }
+      } // Try to get entityManager from various possible sources
+      const entityManager =
+        (this.parent && this.parent.entityManager) ||
+        (this.parent && this.parent.parent) ||
+        (this.FindEntity &&
+          this.FindEntity("UIManager") &&
+          this.FindEntity("UIManager").parent);
 
-      // Emit monster death event for scoring
-      if (
-        this.parent.entityManager &&
-        this.parent.entityManager.BroadcastGlobalEvent
-      ) {
-        this.parent.entityManager.BroadcastGlobalEvent({
+      if (entityManager && entityManager.BroadcastGlobalEvent) {
+        console.log("Broadcasting monster_death event from:", this.parent.name);
+        entityManager.BroadcastGlobalEvent({
           type: "monster_death",
           monster: this.parent,
         });
+      } else {
+        console.error(
+          "Cannot broadcast monster_death event, entityManager not found"
+        );
+        // Try direct access to UIManager as fallback
+        const uiManager = this.FindEntity("UIManager");
+        if (uiManager) {
+          const uiManagerComponent = uiManager.GetComponent("UIManager");
+          if (uiManagerComponent && uiManagerComponent.AddScore) {
+            console.log(
+              "Direct fallback: adding score via UIManager component"
+            );
+            uiManagerComponent.AddScore(1);
+          }
+        }
       }
-
-      // Remove the monster after a delay
+      console.log(`Monster ${this.parent.name} has died, removing from scene`);
       setTimeout(() => {
+        this.CleanupResources();
+
         if (this.parent && this.parent.entityManager) {
           this.parent.entityManager.Remove(this.parent);
         }
@@ -504,7 +556,8 @@ export default class CharacterController extends Component {
     }
   };
   MoveAlongPath(t) {
-    if (!this.path?.length) return;
+    // Check if path exists and has elements, also verify model exists
+    if (!this.path?.length || !this.model || !this.model.position) return;
 
     // Check for nearby monsters to avoid overlapping during movement
     let avoidanceFactor = new THREE.Vector3(0, 0, 0);
@@ -602,8 +655,12 @@ export default class CharacterController extends Component {
       this.path.length = 0;
     }
   }
-
   ApplyRootMotion() {
+    // Check if rootBone exists before trying to access its properties
+    if (!this.rootBone || !this.lastPos) {
+      return;
+    }
+
     if (this.canMove) {
       const vel = this.rootBone.position.clone();
       vel.sub(this.lastPos).multiplyScalar(0.01);
@@ -618,32 +675,116 @@ export default class CharacterController extends Component {
 
     //Reset the root bone horizontal position
     this.lastPos.copy(this.rootBone.position);
-    this.rootBone.position.z = this.rootBone.refPos.z;
-    this.rootBone.position.x = this.rootBone.refPos.x;
+
+    // Make sure refPos exists before accessing it
+    if (this.rootBone.refPos) {
+      this.rootBone.position.z = this.rootBone.refPos.z;
+      this.rootBone.position.x = this.rootBone.refPos.x;
+    }
   }
   Update(t) {
-    this.mixer && this.mixer.update(t);
-    this.ApplyRootMotion();
+    try {
+      // Check for required components before updating
+      if (!this.model || !this.parent) {
+        return;
+      }
 
-    this.UpdateDirection();
-    this.MoveAlongPath(t);
-    this.stateMachine.Update(t);
+      // Update animation mixer if it exists
+      if (this.mixer) {
+        this.mixer.update(t);
+      }
 
-    this.parent.SetRotation(this.model.quaternion);
-    this.parent.SetPosition(this.model.position);
+      this.ApplyRootMotion();
 
-    // Update physics body position if it exists
-    if (this.physicsBody) {
-      const transform = new Ammo.btTransform();
-      transform.setIdentity();
-      transform
-        .getOrigin()
-        .setValue(
-          this.model.position.x,
-          this.model.position.y + 0.9,
-          this.model.position.z
-        );
-      this.physicsBody.setWorldTransform(transform);
+      // Only call these methods if we have the necessary components
+      if (this.dir) {
+        this.UpdateDirection();
+      }
+
+      if (this.path) {
+        this.MoveAlongPath(t);
+      }
+
+      if (this.stateMachine) {
+        this.stateMachine.Update(t);
+      }
+
+      // Update parent entity's rotation and position
+      if (this.model.quaternion && this.model.position) {
+        this.parent.SetRotation(this.model.quaternion);
+        this.parent.SetPosition(this.model.position);
+      }
+
+      // Update physics body position if it exists
+      if (this.physicsBody && this.model && this.model.position) {
+        const transform = new Ammo.btTransform();
+        transform.setIdentity();
+        transform
+          .getOrigin()
+          .setValue(
+            this.model.position.x,
+            this.model.position.y + 0.9,
+            this.model.position.z
+          );
+        this.physicsBody.setWorldTransform(transform);
+      }
+    } catch (error) {
+      console.error("Error in CharacterController.Update:", error);
+    }
+  }
+
+  CleanupResources() {
+    try {
+      // Stop all animations
+      if (this.mixer) {
+        this.mixer.stopAllAction();
+      }
+
+      // Clear path
+      if (this.path) {
+        this.path.length = 0;
+      }
+
+      // Remove physics body
+      if (this.physicsBody && this.physicsWorld) {
+        this.physicsWorld.removeRigidBody(this.physicsBody);
+        this.physicsBody = null;
+      }
+
+      // Clear references
+      this.rootBone = null;
+      this.lastPos = null;
+      this.skinnedmesh = null; // Remove model from scene if it exists
+      if (this.model && this.scene) {
+        this.scene.remove(this.model);
+      }
+
+      // Clean up other components
+      const characterCollision =
+        this.parent?.GetComponent("CharacterCollision");
+      if (
+        characterCollision &&
+        typeof characterCollision.CleanupCollisions === "function"
+      ) {
+        characterCollision.CleanupCollisions();
+      }
+
+      // Clean up attack trigger
+      const attackTrigger = this.parent?.GetComponent("AttackTrigger");
+      if (attackTrigger && attackTrigger.ghostObj && this.physicsWorld) {
+        try {
+          this.physicsWorld.removeCollisionObject(attackTrigger.ghostObj);
+          attackTrigger.ghostObj = null;
+        } catch (err) {
+          console.warn("Error cleaning up attack trigger:", err);
+        }
+      }
+
+      console.log(
+        `Resources cleaned up for monster: ${this.parent?.name || "unknown"}`
+      );
+    } catch (error) {
+      console.error("Error cleaning up monster resources:", error);
     }
   }
 }

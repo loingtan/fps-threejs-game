@@ -15,10 +15,20 @@ export default class UIManager extends Component {
   SetHealth(health) {
     document.getElementById("health_progress").style.width = `${health}%`;
   }
-
   AddScore(points = 1) {
     this.score += points;
-    document.getElementById("score").innerText = this.score;
+    console.log("Score updated:", this.score);
+
+    try {
+      const scoreElement = document.getElementById("score");
+      if (scoreElement) {
+        scoreElement.innerText = this.score;
+      } else {
+        console.error("Score element not found in the DOM");
+      }
+    } catch (error) {
+      console.error("Error updating score in the DOM:", error);
+    }
   }
 
   ResetScore() {
@@ -46,18 +56,30 @@ export default class UIManager extends Component {
   }
   Initialize() {
     document.getElementById("game_hud").style.visibility = "visible";
+    console.log("UIManager initialized, setting up event handlers");
 
-    // Register to listen for monster death events
     if (
       this.parent.entityManager &&
       this.parent.entityManager.RegisterGlobalEventHandler
     ) {
-      this.parent.entityManager.RegisterGlobalEventHandler((eventData) => {
+      console.log(
+        "Registering global event handler for monster_death in UIManager"
+      );
+      const handler = (eventData) => {
+        console.log("UIManager received event:", eventData);
         if (eventData.type === "monster_death") {
           this.AddScore(1);
           console.log("Monster killed! Score:", this.score);
         }
-      });
+      };
+      this.parent.entityManager.RegisterGlobalEventHandler(handler);
+      console.log("Global event handler registered successfully");
+    } else {
+      console.error(
+        "Cannot register event handler in UIManager, entityManager not available"
+      );
+      console.log("this.parent:", this.parent);
+      console.log("this.parent.entityManager:", this.parent.entityManager);
     }
   }
 
