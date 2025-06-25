@@ -24,7 +24,7 @@ export default class Weapon extends Component {
     this.ammoPerMag = 30;
     this.ammo = 100;
     //TEST
-    this.damage = 3; // Further reduced damage to make killing monsters much longer
+    this.damage = 40; // Further reduced damage to make killing monsters much longer
     this.uimanager = null;
     this.reloading = false;
     this.hitResult = {

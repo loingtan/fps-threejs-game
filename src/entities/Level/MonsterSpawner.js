@@ -19,7 +19,7 @@ export default class MonsterSpawner extends Component {
     this.spawnInterval = 2000; // Set to 2 seconds (was 0)    this.maxMonsters = 5; // Maximum monsters at once
     this.monstersAlive = 0;
     this.monsterCounter = 0;
-    this.totalMonstersToSpawn = 2; // Total monsters to spawn before victory (changed from 3 to 2)
+    this.totalMonstersToSpawn = 3; // Total monsters to spawn before victory (changed from 3 to 2)
     this.totalMonstersSpawned = 0;
     this.spawnComplete = false;
 
@@ -266,14 +266,14 @@ export default class MonsterSpawner extends Component {
     this.spawnTimer += deltaTime * 1000; // Convert to milliseconds
 
     // Debug information to help track monster spawning
-    console.log(`
-      -- MONSTER SPAWNER DEBUG --
-      Total spawned: ${this.totalMonstersSpawned}/${this.totalMonstersToSpawn}
-      Currently alive: ${this.monstersAlive}/${this.maxMonsters}
-      Spawn timer: ${this.spawnTimer.toFixed(0)}/${this.spawnInterval}
-      Spawn complete: ${this.spawnComplete}
-      ---------------------------
-    `);
+    // console.log(`
+    //   -- MONSTER SPAWNER DEBUG --
+    //   Total spawned: ${this.totalMonstersSpawned}/${this.totalMonstersToSpawn}
+    //   Currently alive: ${this.monstersAlive}/${this.maxMonsters}
+    //   Spawn timer: ${this.spawnTimer.toFixed(0)}/${this.spawnInterval}
+    //   Spawn complete: ${this.spawnComplete}
+    //   ---------------------------
+    // `);
 
     // UPDATED SPAWN LOGIC: Always ensure all monsters are spawned
     // Create all monsters immediately at the start

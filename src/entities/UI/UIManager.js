@@ -277,16 +277,16 @@ export default class UIManager extends Component {
       // Tạo score display nếu chưa có
       this.scoreDisplay = document.createElement("div");
       this.scoreDisplay.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        color: white;
-        font-size: 16px;
-        font-weight: bold;
-        background: rgba(0,0,0,0.7);
-        padding: 10px;
-        border-radius: 5px;
-        z-index: 1000;
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    color: white;
+    font-size: 24px; // THAY ĐỔI: tăng từ 16px lên 24px
+    font-weight: bold;
+    background: rgba(0,0,0,0.7);
+    padding: 15px; // THAY ĐỔI: tăng từ 10px lên 15px
+    border-radius: 8px; // THAY ĐỔI: tăng từ 5px lên 8px
+    z-index: 1000;
       `;
       this.scoreDisplay.innerHTML = `
         Score: ${this.score}

@@ -9,7 +9,28 @@ export default class PlayerHealth extends Component {
     this.isDead = false;
     this.gameOverDelay = 3000; // 3 seconds before returning to menu
   }
+  AddHealth(amount) {
+    // Đảm bảo amount là số dương
+    if (amount <= 0) return;
 
+    // Cập nhật máu của người chơi
+    this.health = Math.min(this.health + amount, this.maxHealth);
+
+    // Cập nhật hiển thị thanh máu
+    if (this.uimanager) {
+      this.uimanager.SetHealth(this.health);
+    }
+
+    // Log thông báo
+    console.log(
+      `Player health increased by ${amount}, new health: ${this.health}/${this.maxHealth}`
+    );
+
+    // Hiệu ứng flash màu xanh trên màn hình khi được hồi máu
+    this.ShowHealEffect();
+
+    return this.health;
+  }
   TakeHit = (e) => {
     if (this.isDead) return;
 
@@ -22,25 +43,72 @@ export default class PlayerHealth extends Component {
       this.handlePlayerDeath();
     }
   };
+  // Thêm phương thức mới trong PlayerHealth.js
+  AddHealth(amount) {
+    // Đảm bảo amount là số dương
+    if (amount <= 0) return;
 
+    // Cập nhật máu của người chơi
+    this.health = Math.min(this.health + amount, this.maxHealth);
+
+    // Cập nhật hiển thị thanh máu
+    if (this.uimanager) {
+      this.uimanager.SetHealth(this.health);
+
+      // Log thông báo
+      console.log(
+        `Player health increased by ${amount.toFixed(1)}, new health: ${
+          this.health
+        }/${this.maxHealth}`
+      );
+
+      // Hiệu ứng flash màu xanh trên màn hình khi được hồi máu
+      this.ShowHealEffect();
+
+      return this.health;
+    }
+  }
+
+  // Thêm phương thức hiệu ứng hồi máu
+  ShowHealEffect() {
+    // Tạo overlay flash xanh lá
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 255, 0, 0.2);
+    pointer-events: none;
+    z-index: 999;
+    animation: healFlash 0.5s ease-out forwards;
+  `;
+
+    // Thêm animation CSS
+    if (!document.getElementById("heal-animations")) {
+      const style = document.createElement("style");
+      style.id = "heal-animations";
+      style.textContent = `
+      @keyframes healFlash {
+        0% { opacity: 0; }
+        20% { opacity: 0.3; }
+        100% { opacity: 0; }
+      }
+    `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(overlay);
+
+    // Xóa overlay sau khi animation kết thúc
+    setTimeout(() => {
+      document.body.removeChild(overlay);
+    }, 500);
+  }
   // THÊM: Method để lấy health percent cho score calculation
   GetHealthPercent() {
     return this.health / this.maxHealth;
-  }
-
-  // THÊM: Method để heal player (nếu cần)
-  Heal(amount) {
-    if (this.isDead) return;
-    
-    this.health += amount;
-    this.health = Math.min(this.maxHealth, this.health); // Không vượt quá max
-    
-    console.log(`Player healed ${amount}, health now: ${this.health}/${this.maxHealth}`);
-    
-    // Update UI
-    if (this.uimanager) {
-      this.uimanager.SetHealth(this.health);
-    }
   }
 
   handlePlayerDeath() {

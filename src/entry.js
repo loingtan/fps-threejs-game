@@ -125,7 +125,17 @@ class FPSGameApp {
   }
   SetupGraphics() {
     this.scene = new THREE.Scene();
+    // // Bật shadow mapping
+    // this.renderer.shadowMap.enabled = true;
+    // this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // // Thêm ánh sáng tạo bóng đổ
+    // const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    // directionalLight.position.set(-10, 20, 10);
+    // directionalLight.castShadow = true;
+    // directionalLight.shadow.mapSize.width = 2048;
+    // directionalLight.shadow.mapSize.height = 2048;
+    // this.scene.add(directionalLight);
     // Check if we're likely on a mobile device
     const isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -461,40 +471,77 @@ class FPSGameApp {
     // DEBUG: Kiểm tra cookie asset
     console.log("Original cookie asset:", this.assets["cookie"]);
 
-    // CREATE SIMPLE COOKIE GEOMETRY thay vì dùng asset
-    const cookieGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
-    const cookieMaterial = new THREE.MeshLambertMaterial({
+    // TẠO NHIỀU MẪU COOKIE KHÁC NHAU thay vì dùng một loại duy nhất
+    const cookieModels = [];
+
+    // Mẫu 1: Cookie vàng
+    const cookieGeometry1 = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
+    const cookieMaterial1 = new THREE.MeshLambertMaterial({
       color: 0xffd700, // Gold color
       emissive: 0x222200, // Slight glow
     });
-    const cookieMesh = new THREE.Mesh(cookieGeometry, cookieMaterial);
+    const cookieMesh1 = new THREE.Mesh(cookieGeometry1, cookieMaterial1);
+    cookieModels.push(cookieMesh1);
 
-    // Override cookie asset với geometry tự tạo
-    this.assets["cookie"] = cookieMesh;
-    console.log("Created custom cookie mesh:", this.assets["cookie"]);
+    // Mẫu 2: Cookie đỏ (hình lục giác)
+    const cookieGeometry2 = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 6);
+    const cookieMaterial2 = new THREE.MeshLambertMaterial({
+      color: 0xff6347, // Tomato red
+      emissive: 0x220000, // Slight red glow
+    });
+    const cookieMesh2 = new THREE.Mesh(cookieGeometry2, cookieMaterial2);
+    cookieModels.push(cookieMesh2);
 
+    // Mẫu 3: Cookie xanh (hình ngôi sao)
+    const cookieGeometry3 = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 5);
+    const cookieMaterial3 = new THREE.MeshLambertMaterial({
+      color: 0x4169e1, // Royal blue
+      emissive: 0x000022, // Slight blue glow
+    });
+    const cookieMesh3 = new THREE.Mesh(cookieGeometry3, cookieMaterial3);
+    cookieModels.push(cookieMesh3);
+
+    // Mẫu 4: Cookie tím (hình tròn lớn hơn)
+    const cookieGeometry4 = new THREE.CylinderGeometry(1.0, 1.0, 0.15, 24);
+    const cookieMaterial4 = new THREE.MeshLambertMaterial({
+      color: 0x9370db, // Medium purple
+      emissive: 0x110022, // Slight purple glow
+    });
+    const cookieMesh4 = new THREE.Mesh(cookieGeometry4, cookieMaterial4);
+    cookieModels.push(cookieMesh4);
+
+    // Mẫu 5: Cookie xanh lá (hình tam giác)
+    const cookieGeometry5 = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 3);
+    const cookieMaterial5 = new THREE.MeshLambertMaterial({
+      color: 0x32cd32, // Lime green
+      emissive: 0x002200, // Slight green glow
+    });
+    const cookieMesh5 = new THREE.Mesh(cookieGeometry5, cookieMaterial5);
+    cookieModels.push(cookieMesh5);
+
+    // Thay vì chỉ một mẫu, bây giờ lưu mảng các mẫu
+    this.assets["cookie"] = cookieModels;
+    console.log(`Created ${cookieModels.length} different cookie models`);
+    this.entityManager.EndSetup();
     // CREATE MULTIPLE COOKIE SPAWNERS
-    const numberOfSpawners = 3; // Tăng số này để có nhiều cookie cùng lúc
+    const numberOfSpawners = 3;
 
     for (let i = 0; i < numberOfSpawners; i++) {
       const cookieSpawnerEntity = new Entity();
       cookieSpawnerEntity.SetName(`CookieSpawner_${i}`);
-      const levelcookienavmeshComponent = levelEntity.GetComponent("Navmesh");
 
       if (this.assets["cookie"]) {
         cookieSpawnerEntity.AddComponent(
           new CookieSpawner(
-            this.assets["cookie"],
+            this.assets["cookie"], // Bây giờ đây là mảng các model
             this.scene,
             this.physicsWorld,
-            levelcookienavmeshComponent
+            levelmutannavmeshComponent
           )
         );
         this.entityManager.Add(cookieSpawnerEntity);
       }
     }
-    this.entityManager.EndSetup();
-
     this.scene.add(this.camera);
     this.animFrameId = window.requestAnimationFrame(
       this.OnAnimationFrameHandler
