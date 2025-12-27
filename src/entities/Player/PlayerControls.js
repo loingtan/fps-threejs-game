@@ -199,6 +199,7 @@ export default class PlayerControls extends Component {
     if (ms) {
       ms.getWorldTransform(this.transform);
       const p = this.transform.getOrigin();
+      const playerPos = new THREE.Vector3(p.x(), p.y(), p.z());
 
       if (this.isThirdPerson) {
         // Third-person camera positioning - camera behind and above player
@@ -214,7 +215,7 @@ export default class PlayerControls extends Component {
         this.camera.position.set(p.x(), p.y() + this.yOffset, p.z());
       }
 
-      this.parent.SetPosition(this.camera.position);
+      this.parent.SetPosition(playerPos);
     }
   }
 }
