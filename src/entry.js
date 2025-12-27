@@ -77,6 +77,7 @@ class FPSGameApp {
     this.assets = {};
     this.animFrameId = 0;
     this.isGamePaused = false; // Add game pause state
+    this.selectedCharacter = "male"; // Default character selection
 
     AmmoHelper.Init(() => {
       this.Init();
@@ -233,6 +234,20 @@ class FPSGameApp {
     document
       .getElementById("start_game")
       .addEventListener("click", () => this.StartGame());
+
+    // Setup character selection
+    const characterOptions = document.querySelectorAll(".character_option");
+    characterOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        // Remove selected class from all options
+        characterOptions.forEach((opt) => opt.classList.remove("selected"));
+        // Add selected class to clicked option
+        option.classList.add("selected");
+        // Store selected character
+        this.selectedCharacter = option.getAttribute("data-character");
+        console.log("Selected character:", this.selectedCharacter);
+      });
+    });
   }
 
   ShowMenu(visible = true) {

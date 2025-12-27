@@ -89,6 +89,46 @@
         align-items: center;
         justify-content: center;
       }
+      #game_logo {
+        width: 150px;
+        height: 150px;
+        margin-bottom: 20px;
+      }
+      #character_selection {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .character_option {
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        padding: 15px 30px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 5px;
+        font-size: 1.2em;
+        color: #dddddd;
+      }
+      .character_option:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+      .character_option.selected {
+        background-color: rgba(0, 255, 0, 0.3);
+        border-color: #00ff00;
+        color: #00ff00;
+      }
+      #camera_mode_indicator {
+        position: absolute;
+        top: 10%;
+        left: 5%;
+        font-size: 1.2em;
+        color: #00ff00;
+        text-shadow: 2px 2px 4px #000000;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px 15px;
+        border-radius: 5px;
+      }
       #debug {
         position: absolute;
         right: 5%;
@@ -231,12 +271,17 @@
   <body>
     <div id="debug"></div>
     <div id="menu">
+      <img id="game_logo" src="<%=require('./assets/logo/logo.svg')%>" alt="Game Logo" />
       <h1>Alien Shooter</h1>
       <audio
         id="menu_music"
         src="<%=require('./assets/sounds/alienshooter2-theme-games-background-music.wav')%>"
         loop
       ></audio>
+      <div id="character_selection">
+        <div class="character_option selected" data-character="male">Male Character</div>
+        <div class="character_option" data-character="female">Female Character</div>
+      </div>
       <div id="menu_buttons">
         <button id="start_game">NEW GAME</button>
         <!-- <button id="continue_game">CONTINUE GAME</button> -->
@@ -252,6 +297,7 @@
       <div id="health_container">
         <div id="health_progress"></div>
       </div>
+      <div id="camera_mode_indicator">Camera: First Person (Press V to toggle)</div>
     </div>
     <div id="progress"></div>
     <div id="success_screen">
