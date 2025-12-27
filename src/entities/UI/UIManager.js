@@ -40,6 +40,26 @@ export default class UIManager extends Component {
   GetScore() {
     return this.score;
   }
+  ShowKillIcon() {
+    if (!this.killIcon) {
+      console.warn("Kill icon element not found");
+      return;
+    }
+
+    // Remove any existing animation class
+    this.killIcon.classList.remove("show");
+
+    // Trigger reflow to restart animation
+    void this.killIcon.offsetWidth;
+
+    // Add the animation class
+    this.killIcon.classList.add("show");
+
+    // Remove the class after animation completes
+    setTimeout(() => {
+      this.killIcon.classList.remove("show");
+    }, 1500);
+  }
   ShowGameOver() {
     // Create game over UI
     const gameOver = document.createElement("div");
@@ -141,6 +161,9 @@ export default class UIManager extends Component {
     document.getElementById("game_hud").style.visibility = "visible";
     console.log("UIManager initialized, setting up event handlers");
 
+    // Get reference to kill icon element
+    this.killIcon = document.getElementById("kill_icon");
+
     // Find MonsterSpawner for synchronization
     this.monsterSpawner = null;
     const levelEntity = this.FindEntity("Level");
@@ -195,6 +218,9 @@ export default class UIManager extends Component {
               `Monster ${monsterId} killed! Score increment +1. New Score:`,
               this.score
             );
+
+            // Show kill icon animation
+            this.ShowKillIcon();
 
             // Synchronize with MonsterSpawner as a cross-check
             setTimeout(() => this.SynchronizeWithMonsterSpawner(), 100);

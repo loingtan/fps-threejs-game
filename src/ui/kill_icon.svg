@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Skull icon for kill notification -->
+  <circle cx="32" cy="32" r="30" fill="#ff0000" opacity="0.9"/>
+  <g fill="#ffffff">
+    <!-- Skull shape -->
+    <ellipse cx="32" cy="28" rx="12" ry="14"/>
+    <!-- Eyes -->
+    <ellipse cx="26" cy="26" rx="3" ry="4" fill="#000000"/>
+    <ellipse cx="38" cy="26" rx="3" ry="4" fill="#000000"/>
+    <!-- Nose -->
+    <polygon points="32,30 30,34 34,34" fill="#000000"/>
+    <!-- Jaw -->
+    <rect x="24" y="36" width="4" height="6" rx="1"/>
+    <rect x="30" y="36" width="4" height="6" rx="1"/>
+    <rect x="36" y="36" width="4" height="6" rx="1"/>
+  </g>
+  <!-- X mark overlay -->
+  <g stroke="#ffffff" stroke-width="3" opacity="0.8">
+    <line x1="20" y1="20" x2="44" y2="44"/>
+    <line x1="44" y1="20" x2="20" y2="44"/>
+  </g>
+</svg>
