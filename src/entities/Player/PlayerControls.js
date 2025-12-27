@@ -35,6 +35,11 @@ export default class PlayerControls extends Component {
 
     this.flyMode = false;
     this.flySpeed = 10.0;
+
+    // Camera view mode
+    this.isThirdPerson = false;
+    this.thirdPersonDistance = 5.0;
+    this.thirdPersonHeight = 2.0;
   }
 
   Initialize() {
@@ -64,7 +69,22 @@ export default class PlayerControls extends Component {
           this.physicsBody.setGravity(new Ammo.btVector3(0, -9.81, 0));
         }
       }
+
+      // Toggle camera view with 'V' key
+      if (e.code === "KeyV" && !e.repeat) {
+        this.isThirdPerson = !this.isThirdPerson;
+        this.UpdateCameraModeIndicator();
+      }
     });
+  }
+
+  UpdateCameraModeIndicator() {
+    const indicator = document.getElementById("camera_mode_indicator");
+    if (indicator) {
+      indicator.textContent = this.isThirdPerson 
+        ? "Camera: Third Person (Press V to toggle)" 
+        : "Camera: First Person (Press V to toggle)";
+    }
   }
 
   OnPointerlockChange = () => {
@@ -179,8 +199,23 @@ export default class PlayerControls extends Component {
     if (ms) {
       ms.getWorldTransform(this.transform);
       const p = this.transform.getOrigin();
-      this.camera.position.set(p.x(), p.y() + this.yOffset, p.z());
-      this.parent.SetPosition(this.camera.position);
+      const playerPos = new THREE.Vector3(p.x(), p.y(), p.z());
+
+      if (this.isThirdPerson) {
+        // Third-person camera positioning - camera behind and above player
+        const offset = new THREE.Vector3(0, this.thirdPersonHeight, this.thirdPersonDistance);
+        offset.applyQuaternion(this.yaw);
+        this.camera.position.set(
+          p.x() - offset.x,
+          p.y() + offset.y,
+          p.z() - offset.z
+        );
+      } else {
+        // First-person camera positioning
+        this.camera.position.set(p.x(), p.y() + this.yOffset, p.z());
+      }
+
+      this.parent.SetPosition(playerPos);
     }
   }
 }
