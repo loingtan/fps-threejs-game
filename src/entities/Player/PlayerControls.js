@@ -201,13 +201,13 @@ export default class PlayerControls extends Component {
       const p = this.transform.getOrigin();
 
       if (this.isThirdPerson) {
-        // Third-person camera positioning
+        // Third-person camera positioning - camera behind and above player
         const offset = new THREE.Vector3(0, this.thirdPersonHeight, this.thirdPersonDistance);
         offset.applyQuaternion(this.yaw);
         this.camera.position.set(
-          p.x() + offset.x,
+          p.x() - offset.x,
           p.y() + offset.y,
-          p.z() + offset.z
+          p.z() - offset.z
         );
       } else {
         // First-person camera positioning

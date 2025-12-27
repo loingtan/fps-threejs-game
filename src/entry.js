@@ -245,7 +245,6 @@ class FPSGameApp {
         option.classList.add("selected");
         // Store selected character
         this.selectedCharacter = option.getAttribute("data-character");
-        console.log("Selected character:", this.selectedCharacter);
       });
     });
   }
