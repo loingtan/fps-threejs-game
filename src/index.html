@@ -225,6 +225,39 @@
           text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
         }
       }
+      #kill_icon {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100px;
+        height: 100px;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 999;
+        transition: opacity 0.3s ease;
+      }
+      #kill_icon.show {
+        animation: kill_icon_animation 1.5s ease-out;
+      }
+      @keyframes kill_icon_animation {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.5) rotate(-45deg);
+        }
+        30% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
+        }
+        70% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.8) rotate(45deg);
+        }
+      }
     </style>
   </head>
 
@@ -259,6 +292,7 @@
       <p>All monsters eliminated!</p>
       <button id="return_to_menu">Return to Menu</button>
     </div>
+    <img id="kill_icon" src="<%=require('./ui/kill_icon.svg')%>" alt="Kill" />
     <my-app></my-app>
   </body>
 </html>
